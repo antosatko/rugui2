@@ -1,0 +1,25 @@
+[package]
+name = "rugui2"
+version = "0.1.0"
+edition = "2021"
+repository = "https://github.com/antosatko/rugui"
+readme = "readme.md"
+keywords = ["gamedev", "graphics", "gui", "retained_gui", "wgpu"]
+categories = ["rendering", "gui", "game-development", "rendering::engine"]
+license = "MIT"
+
+
+[dependencies]
+bytemuck = { version = "1.20.0", features = ["derive"] }
+
+[dev-dependencies]
+tokio = { version = "1.42.0", features = ["full"] }
+winit = "0.30.5"
+common = { path = "examples/common" }
+
+[features]
+default = []
+
+
+[workspace]
+members = ["examples/common", "rugui2_wgpu", "rugui2_winit"]

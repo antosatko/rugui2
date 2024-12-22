@@ -1,0 +1,10 @@
+[package]
+name = "rugui2_wgpu"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wgpu = {version = "23.0.1"}
+bytemuck = { version = "1.20.0", features = ["derive"] }
+
+rugui2 = {path = "../"}
