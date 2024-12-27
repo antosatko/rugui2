@@ -1,10 +1,9 @@
-use std::sync::Arc;
+use std::{num::NonZero, sync::Arc};
 
 use rugui2::Gui;
 pub use rugui2_wgpu;
-pub use rugui2_winit;
 use rugui2_wgpu::Rugui2WGPU;
-
+pub use rugui2_winit;
 
 pub struct Drawing {
     pub config: wgpu::SurfaceConfiguration,
@@ -117,7 +116,6 @@ pub fn resize_event<Msg: Clone>(gui: &mut Gui<Msg>, drawing: &mut Drawing, size:
     if size.0 == 0 || size.1 == 0 {
         return;
     }
-    drawing
-        .surface
-        .configure(&drawing.device, &drawing.config);
+    gui.resize((NonZero::new(size.0).unwrap(), NonZero::new(size.1).unwrap()));
+    drawing.surface.configure(&drawing.device, &drawing.config);
 }

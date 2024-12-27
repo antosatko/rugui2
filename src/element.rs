@@ -1,14 +1,16 @@
 use std::fmt::Debug;
 
-use crate::{ElemEventTypes, ListenerTypes, Styles, Vector};
+use crate::{ElemEventTypes, ImageData, ListenerTypes, Styles, Vector};
 
-pub struct Element<Msg: Clone> {
+pub struct Element<Msg: Clone, Img: Clone + ImageData> {
     pub label: Option<String>,
     pub events: Vec<EventListener<Msg>>,
     pub children: Option<Vec<ElementKey>>,
     pub(crate) instance: ElementInstance,
-    pub(crate) styles: Styles,
+    pub(crate) styles: Styles<Img>,
     pub(crate) dirty_styles: bool,
+    pub allow_select: bool,
+    pub allow_text_input: bool,
 }
 
 pub struct EventListener<Msg: Clone> {
@@ -84,22 +86,22 @@ pub struct ContainerWrapper {
     dirty_rotation: bool,
 }
 
-impl<Msg: Clone> Element<Msg> {
+impl<Msg: Clone, Img: Clone + ImageData> Element<Msg, Img> {
     pub fn instance(&self) -> &ElementInstance {
         &self.instance
     }
 
-    pub fn styles(&self) -> &Styles {
+    pub fn styles(&self) -> &Styles<Img> {
         &self.styles
     }
 
-    pub fn styles_mut(&mut self) -> &mut Styles {
+    pub fn styles_mut(&mut self) -> &mut Styles<Img> {
         self.dirty_styles = true;
         &mut self.styles
     }
 }
 
-impl<Msg: Clone> Default for Element<Msg> {
+impl<Msg: Clone, Img: Clone + ImageData> Default for Element<Msg, Img> {
     fn default() -> Self {
         Self {
             label: None,
@@ -108,6 +110,8 @@ impl<Msg: Clone> Default for Element<Msg> {
             instance: ElementInstance::default(),
             styles: Styles::default(),
             dirty_styles: true,
+            allow_select: false,
+            allow_text_input: false,
         }
     }
 }

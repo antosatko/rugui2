@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::{Colors, Vector};
 
 #[derive(Debug, Clone)]
-pub struct Styles {
+pub struct Styles <Img: Clone + ImageData> {
     pub width: StyleComponent<Value>,
     pub max_width: StyleComponent<Option<Value>>,
     pub min_width: StyleComponent<Option<Value>>,
@@ -18,6 +18,7 @@ pub struct Styles {
     pub align: StyleComponent<Position>,
     pub grad_linear: StyleComponent<Option<Gradient>>,
     pub grad_radial: StyleComponent<Option<Gradient>>,
+    pub image: StyleComponent<Option<Image<Img>>>,
 }
 
 #[derive(Debug)]
@@ -36,7 +37,35 @@ pub enum Style {
     Align,
     GradLinear,
     GradRadial,
+    Image,
 }
+
+#[derive(Clone)]
+pub struct Image <Img: Clone + ImageData> {
+    pub width: Value,
+    pub height: Value,
+    pub pos: Position,
+    pub data: Img,
+}
+
+impl <Img: Clone + ImageData> std::fmt::Debug for Image<Img> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Image")
+            .field("size", &self.data.get_size())
+            .finish()
+    }
+}
+
+pub trait ImageData {
+    fn get_size(&self) -> (u32, u32);
+}
+
+impl ImageData for () {
+    fn get_size(&self) -> (u32, u32) {
+        (0, 0)
+    }
+}
+
 
 #[derive(Debug, Clone)]
 pub struct Gradient {
@@ -116,7 +145,7 @@ pub enum Container {
     This,
 }
 
-impl Default for Styles {
+impl <Tex: ImageData + Clone> Default for Styles <Tex> {
     fn default() -> Self {
         let val = StyleComponent::new;
         let color = StyleComponent::new;
@@ -126,6 +155,7 @@ impl Default for Styles {
         let pos = StyleComponent::new;
         let opt_val = StyleComponent::new;
         let opt_grad = StyleComponent::new(None);
+        let opt_img = StyleComponent::new(None);
         Self {
             width: val(Value::Value(
                 Container::Container,
@@ -160,6 +190,7 @@ impl Default for Styles {
             }),
             grad_linear: opt_grad.clone(),
             grad_radial: opt_grad,
+            image: opt_img,
         }
     }
 }
@@ -214,7 +245,11 @@ impl Value {
 
 impl From<Vector> for Position {
     fn from(value: Vector) -> Self {
-        Self { width: Value::Px(value.0), height: Value::Px(value.1), container: Container::This }
+        Self {
+            width: Value::Px(value.0),
+            height: Value::Px(value.1),
+            container: Container::This,
+        }
     }
 }
 
@@ -231,10 +266,9 @@ impl Position {
             Container::This => this,
         };
 
-        let x = self.width.calc(c, vp, this);
-        let y = self.height.calc(c, vp, this);
+        let pos = Vector::new(self.width.calc(c, vp, this), self.height.calc(c, vp, this));
 
-        Vector::new(x + c.pos.0 - c.size.0 * 0.5, y + c.pos.1 - c.size.1 * 0.5)
+        pos - c.size * 0.5 + c.pos
     }
 
     pub(crate) fn calc_rot(
@@ -251,9 +285,24 @@ impl Position {
 
         let x = self.width.calc(c, vp, this);
         let y = self.height.calc(c, vp, this);
-        let rot = Vector::new(x - c.size.0 * 0.5, y - c.size.1 * 0.5).rotate_around_origin(c.rotation);
+        let rot =
+            Vector::new(x - c.size.0 * 0.5, y - c.size.1 * 0.5).rotate_around_origin(c.rotation);
 
         Vector::new(c.pos.0, c.pos.1) + rot
+    }
+
+    pub fn calc_relative(
+        &self,
+        container: &crate::element::Container,
+        vp: &crate::element::Container,
+        this: &crate::element::Container,
+    ) -> Vector {
+        let c = match self.container {
+            Container::Container => container,
+            Container::ViewPort => vp,
+            Container::This => this,
+        };
+        Vector::new(self.width.calc(c, vp, this), self.height.calc(c, vp, this)) - c.size * 0.5
     }
 }
 
@@ -346,7 +395,7 @@ mod tests {
     #[test]
     pub fn style_enum_validity() {
         let style = Style::Height;
-        let styles = Styles::default();
+        let styles: Styles<()> = Styles::default();
 
         match style {
             Style::Height => {
@@ -391,6 +440,9 @@ mod tests {
             Style::GradLinear => {
                 let _ = styles.grad_linear;
             }
+            Style::Image => {
+                let _ = styles.image;
+            }
         }
 
         let Styles {
@@ -408,6 +460,7 @@ mod tests {
             min_height,
             grad_radial,
             grad_linear,
+            image,
         } = styles;
         let _ = (width, Style::Width);
         let _ = (height, Style::Height);
@@ -423,5 +476,6 @@ mod tests {
         let _ = (min_width, Style::MinWidth);
         let _ = (grad_radial, Style::GradRadial);
         let _ = (grad_linear, Style::GradLinear);
+        let _ = (image, Style::Image);
     }
 }

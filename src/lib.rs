@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, num::NonZero};
+use std::{fmt::Debug, num::NonZero, path::PathBuf};
 
 use colors::*;
 use element::{Container, *};
@@ -12,22 +12,22 @@ pub mod events;
 pub mod math;
 pub mod styles;
 
-pub struct Gui<Msg: Clone> {
-    elements: HashMap<ElementKey, Element<Msg>>,
-    next_elem_id: u64,
+pub struct Gui<Msg: Clone = (), Img: Clone + ImageData = ()> {
+    elements: Vec<Element<Msg, Img>>,
     viewport: ContainerWrapper,
     size: (u32, u32),
     entry: Option<ElementKey>,
     cursor: Cursor,
     events: Vec<events::ElemEvent<Msg>>,
-    selection: Selection,
+    pub selection: Selection,
+    file_drop_hover: Option<PathBuf>,
 }
 
-impl<Msg: Clone> Gui<Msg> {
+impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
     pub fn new(size: (NonZero<u32>, NonZero<u32>)) -> Self {
         let size = (size.0.get(), size.1.get());
         Self {
-            elements: HashMap::new(),
+            elements: Vec::new(),
             viewport: ContainerWrapper::new_dirty(&Container {
                 pos: Vector::ZERO,
                 size: Vector(size.0 as f32, size.1 as f32),
@@ -35,10 +35,10 @@ impl<Msg: Clone> Gui<Msg> {
             }),
             size,
             entry: None,
-            next_elem_id: 0,
             cursor: Cursor::default(),
             events: Vec::new(),
             selection: Selection::default(),
+            file_drop_hover: None,
         }
     }
 
@@ -60,18 +60,21 @@ impl<Msg: Clone> Gui<Msg> {
         let container = &vp_copy;
         let vp = vp_copy.get();
 
+        self.selection.selectables.clear();
         self.update_element(entry, container, vp);
 
         self.viewport.clean();
     }
 
     fn update_element(&mut self, key: ElementKey, container: &ContainerWrapper, vp: &Container) {
-        let element = match self.elements.get_mut(&key) {
-            Some(e) => e,
-            None => return,
-        };
+        let element = &mut self.elements[key.0 as usize];
+
+        if element.allow_select {
+            self.selection.selectables.push(key);
+        }
 
         let mut element_container = ContainerWrapper::new(&element.instance.container);
+        let container_transforms = container.get();
 
         // --- TRANSFORMS ---
         //
@@ -86,12 +89,12 @@ impl<Msg: Clone> Gui<Msg> {
             let max = element.styles.max_width.fix_dirty_force();
             let min = element.styles.min_width.fix_dirty_force();
 
-            let mut width = width.calc(container.get(), vp, element_container.get());
+            let mut width = width.calc(container_transforms, vp, element_container.get());
             if let Some(max) = max {
-                width = width.min(max.calc(container.get(), vp, element_container.get()));
+                width = width.min(max.calc(container_transforms, vp, element_container.get()));
             }
             if let Some(min) = min {
-                width = width.max(min.calc(container.get(), vp, element_container.get()));
+                width = width.max(min.calc(container_transforms, vp, element_container.get()));
             }
 
             if element_container.get().size.0 != width {
@@ -108,12 +111,12 @@ impl<Msg: Clone> Gui<Msg> {
             let max = element.styles.max_height.fix_dirty_force();
             let min = element.styles.min_height.fix_dirty_force();
 
-            let mut height = style.calc(container.get(), vp, element_container.get());
+            let mut height = style.calc(container_transforms, vp, element_container.get());
             if let Some(max) = max {
-                height = height.min(max.calc(container.get(), vp, element_container.get()));
+                height = height.min(max.calc(container_transforms, vp, element_container.get()));
             }
             if let Some(min) = min {
-                height = height.max(min.calc(container.get(), vp, element_container.get()));
+                height = height.max(min.calc(container_transforms, vp, element_container.get()));
             }
 
             if element_container.get().size.1 != height {
@@ -131,22 +134,20 @@ impl<Msg: Clone> Gui<Msg> {
             || element.styles.align.is_dirty()
             || element.styles.center.is_dirty()
         {
-            let cont = container.get();
-            element_container.set_pos(cont.pos);
+            element_container.set_pos(container_transforms.pos);
 
             let center = element
                 .styles
                 .center
                 .get()
-                .calc(cont, vp, element_container.get());
-            let align = center
-                - element
-                    .styles
-                    .align
-                    .get()
-                    .calc(cont, vp, element_container.get());
+                .calc(container_transforms, vp, element_container.get());
+            let align = element
+                .styles
+                .align
+                .get()
+                .calc_relative(container_transforms, vp, element_container.get());
 
-            element_container.set_pos(center + align);
+            element_container.set_pos(center - align);
         }
 
         //
@@ -154,10 +155,9 @@ impl<Msg: Clone> Gui<Msg> {
         // - dependent on position
         //
         if element_container.dirty_pos() || container.dirty_rotation() {
-            let cont = container.get();
             let elem = element_container.get();
-            if cont.rotation != 0.0 && cont.pos != elem.pos {
-                let pos = elem.pos.rotate_around(&cont.pos, cont.rotation);
+            if container_transforms.rotation != 0.0 && container_transforms.pos != elem.pos {
+                let pos = elem.pos.rotate_around(&container_transforms.pos, container_transforms.rotation);
                 element_container.set_pos(pos);
             };
         }
@@ -167,7 +167,7 @@ impl<Msg: Clone> Gui<Msg> {
                     .styles
                     .rotation
                     .get()
-                    .calc(container.get(), vp, element_container.get());
+                    .calc(container_transforms, vp, element_container.get());
             element_container.set_rotation(rot);
         }
         // --- TRANSFORMS ---
@@ -178,17 +178,17 @@ impl<Msg: Clone> Gui<Msg> {
             || element_container.dirty_rotation();
         if transform_update || element.styles.round.is_dirty() {
             if let Some(rnd) = element.styles.round.get() {
-                let size = rnd.size.calc(container.get(), vp, element_container.get());
+                let size = rnd.size.calc(container_transforms, vp, element_container.get());
                 let smooth = rnd
                     .smooth
-                    .calc(container.get(), vp, element_container.get());
+                    .calc(container_transforms, vp, element_container.get());
                 element.instance.round = [size, smooth];
             }
         }
         if transform_update || element.styles.grad_linear.is_dirty() {
             if let Some(grad) = element.styles.grad_linear.fix_dirty_force() {
-                let p1 = grad.p1.0.calc(container.get(), vp, element_container.get());
-                let p2 = grad.p2.0.calc(container.get(), vp, element_container.get());
+                let p1 = grad.p1.0.calc(container_transforms, vp, element_container.get());
+                let p2 = grad.p2.0.calc(container_transforms, vp, element_container.get());
                 element.instance.lin_grad_p1 = p1;
                 element.instance.lin_grad_p2 = p2;
                 element.instance.lin_grad_color1 = grad.p1.1.into();
@@ -203,11 +203,11 @@ impl<Msg: Clone> Gui<Msg> {
                 let p1 = grad
                     .p1
                     .0
-                    .calc_rot(container.get(), vp, element_container.get());
+                    .calc_rot(container_transforms, vp, element_container.get());
                 let p2 = grad
                     .p2
                     .0
-                    .calc_rot(container.get(), vp, element_container.get());
+                    .calc_rot(container_transforms, vp, element_container.get());
                 element.instance.rad_grad_p1 = p1;
                 element.instance.rad_grad_p2 = p2;
                 element.instance.rad_grad_color1 = grad.p1.1.into();
@@ -281,21 +281,37 @@ impl<Msg: Clone> Gui<Msg> {
             for child in &children {
                 self.update_element(*child, &element_container, vp);
             }
-            if let Some(e) = self.elements.get_mut(&key) {
-                e.children = Some(children);
-            };
+            self.elements[key.0 as usize].children = Some(children);
         }
     }
 
     pub fn env_event(&mut self, event: EnvEvents) -> EnvEventStates {
-        match event {
-            EnvEvents::MouseButton { button, press } => (),
+        match &event {
+            EnvEvents::Input { text } => {
+                if let Some(key) = self.selection.current {
+                    if let Some(e) = self.get_element(key) {
+                        if e.allow_text_input {
+                            self.events.push(ElemEvent {
+                                kind: ElemEvents::TextInput { text: text.clone() },
+                                element_key: key,
+                                msg: None,
+                            });
+                        }
+                    }
+                }
+            }
+            EnvEvents::KeyPress { .. } => {}
+            EnvEvents::MouseButton { .. } => (),
             EnvEvents::CursorMove { pos } => {
                 self.cursor.last = self.cursor.current;
-                self.cursor.current = pos;
+                self.cursor.current = *pos;
             }
-            EnvEvents::KeyInput { press } => (),
-            EnvEvents::Scroll { delta } => (),
+            EnvEvents::Scroll { .. } => (),
+            EnvEvents::FileDrop { path, opt } => match opt {
+                FileDropOpts::Drop => self.file_drop_hover = None,
+                FileDropOpts::Hover => self.file_drop_hover = path.clone(),
+                FileDropOpts::Cancel => self.file_drop_hover = None,
+            },
             EnvEvents::Select { opt } => {
                 match opt {
                     SelectOpts::Next => {
@@ -311,6 +327,7 @@ impl<Msg: Clone> Gui<Msg> {
                                 msg: None,
                             });
                         }
+                        println!("{:?}", self.selection.selectables);
                         if let Some(key) = self.selection.next() {
                             self.events.push(ElemEvent {
                                 kind: ElemEvents::Selection {
@@ -364,20 +381,17 @@ impl<Msg: Clone> Gui<Msg> {
 
         let mut state = EnvEventStates::Free;
         self.entry
-            .map(|key| self.elem_env_event(key, event, &mut state));
+            .map(|key| self.elem_env_event(key, &event, &mut state));
         state
     }
 
     pub fn elem_env_event(
         &mut self,
         key: ElementKey,
-        event: EnvEvents,
+        event: &EnvEvents,
         state: &mut EnvEventStates,
     ) {
-        let elem = match self.get_element(key) {
-            Some(e) => e,
-            None => return,
-        };
+        let elem = &self.elements[key.0 as usize];
 
         if let Some(children) = elem.children.clone() {
             for key in children {
@@ -385,10 +399,7 @@ impl<Msg: Clone> Gui<Msg> {
             }
         }
 
-        let elem = match self.elements.get(&key) {
-            Some(e) => e,
-            None => return,
-        };
+        let elem = &self.elements[key.0 as usize];
 
         for listener in &elem.events {
             match (&listener.kind, &state) {
@@ -397,7 +408,7 @@ impl<Msg: Clone> Gui<Msg> {
                 (ListenerTypes::Peek, EnvEventStates::Free) => (),
                 _ => continue,
             }
-            match (&listener.event, event) {
+            match (&listener.event, &event) {
                 (ElemEventTypes::MouseMove, EnvEvents::CursorMove { .. }) => {
                     if let Some(pos) = self
                         .cursor
@@ -453,8 +464,33 @@ impl<Msg: Clone> Gui<Msg> {
                         .current
                         .container_colision(&elem.instance.container)
                     {
+                        let (button, press) = (*button, *press);
                         self.events.push(ElemEvent {
                             kind: ElemEvents::Click { button, press, pos },
+                            element_key: key,
+                            msg: listener.msg.clone(),
+                        });
+                        Self::fix_event_state(state, &listener.kind);
+                    }
+                }
+                (ElemEventTypes::FileDrop, EnvEvents::FileDrop { path, opt }) => {
+                    match opt {
+                        FileDropOpts::Cancel => continue,
+                        FileDropOpts::Hover => continue,
+                        _ => (),
+                    }
+                    if let Some(pos) = self
+                        .cursor
+                        .current
+                        .container_colision(&elem.instance.container)
+                    {
+                        let path = if let Some(path) = path {
+                            path.clone()
+                        } else {
+                            continue;
+                        };
+                        self.events.push(ElemEvent {
+                            kind: ElemEvents::FileDrop { path, pos },
                             element_key: key,
                             msg: listener.msg.clone(),
                         });
@@ -467,6 +503,7 @@ impl<Msg: Clone> Gui<Msg> {
                         .current
                         .container_colision(&elem.instance.container)
                     {
+                        let delta = *delta;
                         self.events.push(ElemEvent {
                             kind: ElemEvents::Scroll { delta, pos },
                             element_key: key,
@@ -474,6 +511,23 @@ impl<Msg: Clone> Gui<Msg> {
                         });
                         Self::fix_event_state(state, &listener.kind);
                     }
+                }
+                (
+                    ElemEventTypes::KeyPress,
+                    EnvEvents::KeyPress {
+                        key: keyboard_key,
+                        press,
+                    },
+                ) => {
+                    let (keyboard_key, press) = (*keyboard_key, *press);
+                    self.events.push(ElemEvent {
+                        kind: ElemEvents::KeyPress {
+                            press,
+                            key: keyboard_key,
+                        },
+                        element_key: key,
+                        msg: listener.msg.clone(),
+                    });
                 }
                 _ => continue,
             }
@@ -490,7 +544,7 @@ impl<Msg: Clone> Gui<Msg> {
 
     pub fn foreach_element_mut(
         &mut self,
-        cb: &mut impl FnMut(&mut Element<Msg>, ElementKey),
+        cb: &mut impl FnMut(&mut Element<Msg, Img>, ElementKey),
         key: Option<ElementKey>,
     ) {
         let k = match key {
@@ -515,7 +569,7 @@ impl<Msg: Clone> Gui<Msg> {
         self.get_element_mut(k).expect("Unexpected :)").children = Some(children);
     }
 
-    pub fn foreach_element(&self, cb: impl Fn(&Element<Msg>, ElementKey), key: Option<ElementKey>) {
+    pub fn foreach_element(&self, cb: impl Fn(&Element<Msg, Img>, ElementKey), key: Option<ElementKey>) {
         let k = match key {
             Some(key) => key,
             None => match self.entry {
@@ -537,6 +591,40 @@ impl<Msg: Clone> Gui<Msg> {
         }
     }
 
+    pub fn first_element(
+        &self,
+        root: Option<ElementKey>,
+        predicate: &impl Fn(&Element<Msg, Img>) -> bool,
+    ) -> Option<ElementKey> {
+        let root = match root {
+            Some(r) => r,
+            None => match self.entry {
+                Some(e) => e,
+                None => return None,
+            },
+        };
+
+        let elem = &self.elements[root.0 as usize];
+
+        match &elem.children {
+            Some(c) => {
+                let children = c.clone();
+                for c in children {
+                    match self.first_element(Some(c), predicate) {
+                        Some(k) => return Some(k),
+                        None => (),
+                    }
+                }
+            }
+            None => (),
+        };
+
+        if predicate(elem) {
+            return Some(root);
+        }
+        None
+    }
+
     pub fn prepare_events(&mut self) {
         self.events.reverse();
     }
@@ -545,19 +633,26 @@ impl<Msg: Clone> Gui<Msg> {
         self.events.pop()
     }
 
-    pub fn add_element(&mut self, element: Element<Msg>) -> ElementKey {
-        let key = ElementKey(self.next_elem_id);
-        self.next_elem_id += 1;
-        self.elements.insert(key, element);
+    pub fn add_element(&mut self, element: Element<Msg, Img>) -> ElementKey {
+        let key = ElementKey(self.elements.len() as u64);
+        self.elements.push(element);
         key
     }
 
-    pub fn get_element(&self, k: ElementKey) -> Option<&Element<Msg>> {
-        self.elements.get(&k)
+    pub fn get_element(&self, k: ElementKey) -> Option<&Element<Msg, Img>> {
+        if (k.0 as usize) < self.elements.len() {
+            Some(&self.elements[k.0 as usize])
+        }else {
+            None
+        }
     }
 
-    pub fn get_element_mut(&mut self, k: ElementKey) -> Option<&mut Element<Msg>> {
-        self.elements.get_mut(&k)
+    pub fn get_element_mut(&mut self, k: ElementKey) -> Option<&mut Element<Msg, Img>> {
+        if (k.0 as usize) < self.elements.len() {
+            Some(&mut self.elements[k.0 as usize])
+        }else {
+            None
+        }
     }
 
     pub fn set_entry(&mut self, key: ElementKey) {
@@ -575,11 +670,23 @@ pub struct Cursor {
     pub last: Vector,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Selection {
-    pub selectables: Vec<ElementKey>,
-    pub current: Option<ElementKey>,
+    pub(crate) selectables: Vec<ElementKey>,
+    pub(crate) current: Option<ElementKey>,
     pub locked: bool,
+    pub menu_accessibility: bool,
+}
+
+impl Default for Selection {
+    fn default() -> Self {
+        Selection {
+            selectables: Vec::new(),
+            current: None,
+            locked: false,
+            menu_accessibility: false,
+        }
+    }
 }
 
 impl Selection {
@@ -589,7 +696,7 @@ impl Selection {
                 .selectables
                 .iter()
                 .skip_while(|k| **k != current)
-                .next()
+                .nth(1)
                 .cloned(),
             None => self.selectables.first().cloned(),
         };
@@ -602,7 +709,7 @@ impl Selection {
                 .iter()
                 .rev()
                 .skip_while(|k| **k != current)
-                .next()
+                .nth(1)
                 .cloned(),
             None => self.selectables.last().cloned(),
         };
@@ -618,5 +725,85 @@ impl Selection {
         } else {
             self.current = None
         }
+    }
+    pub fn select_element_unchecked(&mut self, key: ElementKey) {
+        self.current = Some(key)
+    }
+    pub fn current(&self) -> &Option<ElementKey> {
+        &self.current
+    }
+}
+
+
+#[cfg(test)] 
+mod tests {
+    use std::{num::NonZero, time::{Duration, Instant}};
+
+    use crate::{Element, Gui};
+
+    #[test]
+    pub fn benchmark() {
+        let mut init_total = Duration::ZERO;
+        let mut step_total = Duration::ZERO;
+
+        for _ in 0..10000 {
+            let mut gui: Gui = Gui::new((
+                NonZero::new(800).unwrap(),
+                NonZero::new(800).unwrap(),
+            ));
+    
+            let mut elem = Element::default();
+    
+            let mut children = Vec::new();
+            for _ in 0..1000 {
+                let elem = Element::default();
+    
+    
+                let elem_key = gui.add_element(elem);
+                children.push(elem_key);
+            }
+            elem.children = Some(children);
+    
+            let elem_key = gui.add_element(elem);
+    
+            gui.set_entry(elem_key);
+            init_total += measure_task(|| gui.update(), None).1;
+            step_total += measure_task(|| gui.update(), None).1;
+        }
+
+        println!("-----------------");
+        println!("BENCHMARK END");
+        println!("");
+        println!("init avg: {:?}", init_total / 10000);
+        println!("step avg: {:?}", step_total / 10000);
+
+        // results
+        // initial
+        // init avg: 7.485µs
+        // step avg: 3.588µs
+        //
+        // moved container into own variable
+        // init avg: 5.989µs
+        // step avg: 2.889µs
+        //
+        // replaced HashMap<K, E> with Vec<E>
+        // init avg: 4.856µs
+        // step avg: 1.432µs
+        // 
+        // nothing
+        // init avg: 78.916µs
+        // step avg: 15.219µs
+
+        panic!("danda")
+    }
+
+    fn measure_task<T>(mut task: impl FnMut() -> T, label: Option<&str>) -> (T, Duration) {
+        let start = Instant::now();
+        let r = task();
+        let dur = start.elapsed();
+        if let Some(label) = label {
+            println!("Task '{label}' took: {:?}", dur);
+        }
+        (r, dur)
     }
 }

@@ -27,7 +27,7 @@ pub enum App {
 
 pub struct Program {
     pub window: Arc<Window>,
-    pub gui: Gui<()>,
+    pub gui: Gui,
     pub rt: Runtime,
     pub element_key: ElementKey,
     pub element_key2: ElementKey,
@@ -173,12 +173,7 @@ impl ApplicationHandler for App {
 
         match event {
             WindowEvent::Resized(size) => {
-                //println!("{:?}", size);
                 resize_event(&mut this.gui, &mut this.drawing, size.into());
-                this.gui.resize((
-                    NonZero::new(size.width).unwrap(),
-                    NonZero::new(size.height).unwrap(),
-                ));
             }
             WindowEvent::CloseRequested => {
                 event_loop.exit();

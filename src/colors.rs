@@ -12,6 +12,19 @@ impl Colors {
     pub const GREEN: Self = Self::FRgba(0.0, 1.0, 0.0, 1.0);
     pub const BLUE: Self = Self::FRgba(0.0, 0.0, 1.0, 1.0);
     pub const TRANSPARENT: Self = Self::FRgba(0.0, 0.0, 0.0, 0.0);
+    pub const YELLOW: Self = Self::FRgba(1.0, 1.0, 0.0, 1.0);
+    pub const CYAN: Self = Self::FRgba(0.0, 1.0, 1.0, 1.0);
+    pub const MAGENTA: Self = Self::FRgba(1.0, 0.0, 1.0, 1.0);
+    pub const ORANGE: Self = Self::FRgba(1.0, 0.5, 0.0, 1.0);
+    pub const PURPLE: Self = Self::FRgba(0.5, 0.0, 1.0, 1.0);
+    pub const PINK: Self = Self::FRgba(1.0, 0.0, 0.5, 1.0);
+    pub const LIME: Self = Self::FRgba(0.5, 1.0, 0.0, 1.0);
+    pub const BROWN: Self = Self::FRgba(0.6, 0.3, 0.0, 1.0);
+    pub const SKYBLUE: Self = Self::FRgba(0.5, 0.5, 1.0, 1.0);
+    pub const GRAY: Self = Self::FRgba(0.5, 0.5, 0.5, 1.0);
+    pub const SILVER: Self = Self::FRgba(0.75, 0.75, 0.75, 1.0);
+    pub const GOLD: Self = Self::FRgba(1.0, 0.84, 0.0, 1.0);
+    pub const BRONZE: Self = Self::FRgba(0.8, 0.5, 0.2, 1.0);
 }
 
 impl From<[f32; 4]> for Colors {
