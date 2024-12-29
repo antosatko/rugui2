@@ -1,11 +1,16 @@
 use std::{collections::HashMap, num::NonZero, sync::Arc, time::Instant};
 
-use common::{resize_event, rugui2_wgpu::Rugui2WGPU, rugui2_winit, Drawing};
+use common::{
+    resize_event,
+    rugui2_wgpu::{Rugui2WGPU, texture::Texture},
+    rugui2_winit, Drawing,
+};
+use image::{EncodableLayout, GenericImageView};
 use rugui2::{
     colors::Colors,
-    element::{Element, ElementKey},
+    element::{Element, ElementKey, EventListener},
     events::{ElemEvents, SelectionStates},
-    styles::{Container, Portion, Position, Value, Values},
+    styles::{Container, Image, Portion, Position, Rotation, Round, Value, Values},
     Gui,
 };
 use tokio::runtime::Runtime;
@@ -28,7 +33,7 @@ pub enum App {
 
 pub struct Program {
     pub window: Arc<Window>,
-    pub gui: Gui,
+    pub gui: Gui<(), Texture>,
     pub rt: Runtime,
     pub element_key: ElementKey,
     pub drawing: Drawing,
@@ -57,6 +62,27 @@ impl ApplicationHandler for App {
 
         let mut elem = Element::default();
         elem.label = Some(String::from("Container"));
+        let binding = image::load_from_memory(include_bytes!("imag.png")).unwrap();
+        let image = binding.as_rgba8().unwrap();
+        let dimensions = image.dimensions();
+        elem.styles_mut().image.set(Some(Image {
+            data: Texture::from_bytes(
+                &drawing.device,
+                &drawing.queue,
+                image.as_bytes(),
+                dimensions,
+                Some("BG"),
+            ).unwrap(),
+        }));
+        elem.styles_mut().rotation.set(Rotation{
+            cont: Container::This,
+            rot: rugui2::styles::Rotations::Deg(0.01),
+        });
+        elem.styles_mut().round.set(Some(Round{
+            size: Value::Px(100.0),
+            smooth: Value::Px(0.0),
+        }));
+        
         const CHILDREN: f32 = 5.0;
         let mut children = Vec::new();
         let mut text_fields = HashMap::new();
@@ -84,6 +110,12 @@ impl ApplicationHandler for App {
                 Portion::Mul(ratio),
             ));
 
+            child.events.push(EventListener {
+                event: rugui2::events::ElemEventTypes::Click,
+                kind: rugui2::events::ListenerTypes::Listen,
+                msg: None,
+            });
+
             let child_key = gui.add_element(child);
             text_fields.insert(child_key, String::new());
             children.push(child_key);
@@ -92,7 +124,6 @@ impl ApplicationHandler for App {
 
         let element_key = gui.add_element(elem);
         gui.set_entry(element_key);
-
 
         let program = Program {
             window,
@@ -129,7 +160,7 @@ impl ApplicationHandler for App {
                         if let Some(txt) = this.text_fields.get(&e.element_key) {
                             this.window.set_title(&txt);
                         }
-                        println!("selected: {}", e.element_key.raw());
+                        // println!("selected: {}", e.element_key.raw());
                         let e = this.gui.get_element_mut(e.element_key).unwrap();
                         e.styles_mut().color.set(Colors::ORANGE);
                     }
@@ -137,9 +168,9 @@ impl ApplicationHandler for App {
                         if let Some(txt) = this.text_fields.get(&e.element_key) {
                             this.window.set_title(&txt);
                         }
-                        println!("unselected: {}", e.element_key.raw());
+                        // println!("unselected: {}", e.element_key.raw());
                         let e = this.gui.get_element_mut(e.element_key).unwrap();
-                        e.styles_mut().color.set(Colors::BLACK);
+                        e.styles_mut().color.set(Colors::TRANSPARENT);
                     }
                 },
                 ElemEvents::TextInput { text } => match this.text_fields.get_mut(&e.element_key) {
@@ -149,6 +180,11 @@ impl ApplicationHandler for App {
                     }
                     None => (),
                 },
+                ElemEvents::Click { press: true, .. } => {
+                    this.gui.env_event(rugui2::events::EnvEvents::Select {
+                        opt: rugui2::events::SelectOpts::SelectKey(e.element_key),
+                    });
+                }
                 _ => (),
             }
         }

@@ -19,6 +19,7 @@ pub struct Styles <Img: Clone + ImageData> {
     pub grad_linear: StyleComponent<Option<Gradient>>,
     pub grad_radial: StyleComponent<Option<Gradient>>,
     pub image: StyleComponent<Option<Image<Img>>>,
+    pub image_tint: StyleComponent<Colors>,
 }
 
 #[derive(Debug)]
@@ -38,13 +39,11 @@ pub enum Style {
     GradLinear,
     GradRadial,
     Image,
+    ImageTint,
 }
 
 #[derive(Clone)]
 pub struct Image <Img: Clone + ImageData> {
-    pub width: Value,
-    pub height: Value,
-    pub pos: Position,
     pub data: Img,
 }
 
@@ -191,6 +190,7 @@ impl <Tex: ImageData + Clone> Default for Styles <Tex> {
             grad_linear: opt_grad.clone(),
             grad_radial: opt_grad,
             image: opt_img,
+            image_tint: color(Colors::ALPHA_FULL),
         }
     }
 }
@@ -443,6 +443,9 @@ mod tests {
             Style::Image => {
                 let _ = styles.image;
             }
+            Style::ImageTint => {
+                let _ = styles.image_tint;
+            }
         }
 
         let Styles {
@@ -461,6 +464,7 @@ mod tests {
             grad_radial,
             grad_linear,
             image,
+            image_tint,
         } = styles;
         let _ = (width, Style::Width);
         let _ = (height, Style::Height);
@@ -477,5 +481,6 @@ mod tests {
         let _ = (grad_radial, Style::GradRadial);
         let _ = (grad_linear, Style::GradLinear);
         let _ = (image, Style::Image);
+        let _ = (image_tint, Style::ImageTint);
     }
 }

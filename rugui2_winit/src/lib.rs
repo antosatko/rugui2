@@ -1,11 +1,9 @@
 use rugui2::{
-    events::{EnvEventStates, Key},
-    math::Vector,
-    Gui,
+    events::{EnvEventStates, Key}, math::Vector, styles::ImageData, Gui
 };
 use winit::{dpi::PhysicalPosition, event::WindowEvent, keyboard::NamedKey};
 
-pub fn event<Msg: Clone>(winit: &WindowEvent, gui: &mut Gui<Msg>) -> EnvEventStates {
+pub fn event<Msg: Clone, Img: Clone + ImageData>(winit: &WindowEvent, gui: &mut Gui<Msg, Img>) -> EnvEventStates {
     match winit {
         WindowEvent::DroppedFile(path_buf) => gui.env_event(rugui2::events::EnvEvents::FileDrop {
             path: Some(path_buf.clone()),
@@ -59,6 +57,11 @@ pub fn event<Msg: Clone>(winit: &WindowEvent, gui: &mut Gui<Msg>) -> EnvEventSta
                         winit::keyboard::Key::Named(NamedKey::ArrowLeft) => {
                             return gui.env_event(rugui2::events::EnvEvents::Select {
                                 opt: rugui2::events::SelectOpts::Prev,
+                            })
+                        }
+                        winit::keyboard::Key::Named(NamedKey::Escape) => {
+                            return gui.env_event(rugui2::events::EnvEvents::Select {
+                                opt: rugui2::events::SelectOpts::NoFocus,
                             })
                         }
                         _ => (),

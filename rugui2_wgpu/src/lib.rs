@@ -1,8 +1,11 @@
 use std::{collections::HashMap, mem::size_of};
 
+use texture::Texture;
 use wgpu::{include_wgsl, PipelineLayoutDescriptor, RenderPipelineDescriptor, VertexAttribute};
 
 use rugui2::element::{ElementInstance, Flags};
+
+pub mod texture;
 
 pub struct Rugui2WGPU {
     pub dimensions_buffer: wgpu::Buffer,
@@ -10,6 +13,8 @@ pub struct Rugui2WGPU {
     pub size: (u32, u32),
 
     pub instance_buffer: wgpu::Buffer,
+
+    dummy_texture: Texture,
 
     pub pipeline: wgpu::RenderPipeline,
 }
@@ -111,11 +116,25 @@ impl Rugui2WGPU {
                 shader_location: 12,
                 offset: 132,
             },
+            // image_tint
+            VertexAttribute {
+                format: wgpu::VertexFormat::Float32x4,
+                shader_location: 13,
+                offset: 148,
+            },
+            // image_size
+            VertexAttribute {
+                format: wgpu::VertexFormat::Float32x2,
+                shader_location: 14,
+                offset: 164,
+            },
         ],
         step_mode: wgpu::VertexStepMode::Instance,
     };
 
     pub fn new(queue: &wgpu::Queue, device: &wgpu::Device, size: (u32, u32)) -> Self {
+        let dummy_texture =
+            Texture::from_bytes(device, queue, &[0; 4], (1, 1), Some("Rugui2 dummy texture")).unwrap();
         let dimensions_bind_group_layout =
             device.create_bind_group_layout(&Self::DIMENSIONS_LAYOUT);
 
@@ -145,6 +164,9 @@ impl Rugui2WGPU {
             bytemuck::cast_slice(&[size.0 as f32, size.1 as f32]),
         );
 
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&Texture::BIND_GROUP_LAYOUT);
+
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Rugui2 Instance Buffer"),
             size: (size_of::<ElementInstance>() * 1024) as u64,
@@ -154,7 +176,7 @@ impl Rugui2WGPU {
 
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Rugui2 Pipeline Layout Descriptor"),
-            bind_group_layouts: &[&dimensions_bind_group_layout],
+            bind_group_layouts: &[&dimensions_bind_group_layout, &texture_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -171,6 +193,7 @@ impl Rugui2WGPU {
                     constants: &HashMap::from([
                         ("LIN_GRADIENT".to_string(), Flags::LinearGradient.into()),
                         ("RAD_GRADIENT".to_string(), Flags::RadialGradient.into()),
+                        ("TEXTURE".to_string(), Flags::Image.into()),
                     ]),
                     ..Default::default()
                 },
@@ -182,6 +205,7 @@ impl Rugui2WGPU {
                     constants: &HashMap::from([
                         ("LIN_GRADIENT".to_string(), Flags::LinearGradient.into()),
                         ("RAD_GRADIENT".to_string(), Flags::RadialGradient.into()),
+                        ("TEXTURE".to_string(), Flags::Image.into()),
                     ]),
                     ..Default::default()
                 },
@@ -215,11 +239,12 @@ impl Rugui2WGPU {
             dimensions_bind_group,
             size,
             pipeline,
+            dummy_texture,
             instance_buffer,
         }
     }
 
-    pub fn resize<Msg: Clone>(&mut self, gui: &mut rugui2::Gui<Msg>, queue: &wgpu::Queue) {
+    pub fn resize<Msg: Clone>(&mut self, gui: &mut rugui2::Gui<Msg, Texture>, queue: &wgpu::Queue) {
         let size = gui.size();
         if self.size == size {
             return;
@@ -233,7 +258,7 @@ impl Rugui2WGPU {
         );
     }
 
-    pub fn prepare<Msg: Clone>(&mut self, gui: &mut rugui2::Gui<Msg>, queue: &wgpu::Queue) {
+    pub fn prepare<Msg: Clone>(&mut self, gui: &mut rugui2::Gui<Msg, Texture>, queue: &wgpu::Queue) {
         self.resize(gui, queue);
         gui.foreach_element_mut(
             &mut |e, k| {
@@ -249,14 +274,18 @@ impl Rugui2WGPU {
 
     pub fn render<'a, Msg: Clone>(
         &'a mut self,
-        gui: &mut rugui2::Gui<Msg>,
+        gui: &mut rugui2::Gui<Msg, Texture>,
         pass: &mut wgpu::RenderPass<'a>,
     ) {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.dimensions_bind_group, &[]);
+        pass.set_bind_group(1, self.dummy_texture.bind_group.as_ref(), &[]);
         pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
         gui.foreach_element_mut(
-            &mut |_, k| {
+            &mut |e, k| {
+                if let Some(tex) = e.styles().image.get() {
+                    pass.set_bind_group(1, tex.data.bind_group.as_ref(), &[]);
+                }
                 let i = k.raw() as u32;
                 pass.draw(0..6, i..i + 1);
             },

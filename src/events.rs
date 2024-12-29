@@ -44,6 +44,8 @@ pub enum SelectOpts {
     Confirm,
     Lock,
     Unlock,
+    SelectKey(ElementKey),
+    NoFocus,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -134,7 +136,6 @@ pub enum SelectionStates {
 
 /// Keys taken from [winit](https://github.com/rust-windowing/winit) version 0.30.5
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Key {
     /// The `Alt` (Alternative) key.
     ///

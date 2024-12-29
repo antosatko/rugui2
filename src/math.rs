@@ -4,7 +4,7 @@ use crate::element::Container;
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
-#[derive(bytemuck::Zeroable, bytemuck::Pod)]
+#[cfg_attr(feature = "bytemuck", derive(bytemuck::Zeroable, bytemuck::Pod))]
 #[repr(C)]
 pub struct Vector(pub f32, pub f32);
 

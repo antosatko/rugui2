@@ -76,6 +76,24 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         let mut element_container = ContainerWrapper::new(&element.instance.container);
         let container_transforms = container.get();
 
+        // --- CONTENT-CONTAINERS ---
+        if let Some(image_opt) = element.styles.image.fix_dirty() {
+            match image_opt {
+                Some(image) => {
+                    let size = image.data.get_size();
+                    element.instance.image_size = [size.0 as f32, size.1 as f32];
+
+                    element.instance.set_flag(Flags::Image);
+                }
+                None => {
+                    element.instance.image_size = [0.0, 0.0];
+                    element.instance.remove_flag(Flags::Image);
+                }
+            }
+        }
+        // --- CONTENT-CONTAINERS ---
+
+
         // --- TRANSFORMS ---
         //
         // SIZE
@@ -136,16 +154,17 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         {
             element_container.set_pos(container_transforms.pos);
 
-            let center = element
-                .styles
-                .center
-                .get()
-                .calc(container_transforms, vp, element_container.get());
-            let align = element
-                .styles
-                .align
-                .get()
-                .calc_relative(container_transforms, vp, element_container.get());
+            let center =
+                element
+                    .styles
+                    .center
+                    .get()
+                    .calc(container_transforms, vp, element_container.get());
+            let align = element.styles.align.get().calc_relative(
+                container_transforms,
+                vp,
+                element_container.get(),
+            );
 
             element_container.set_pos(center - align);
         }
@@ -157,20 +176,23 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         if element_container.dirty_pos() || container.dirty_rotation() {
             let elem = element_container.get();
             if container_transforms.rotation != 0.0 && container_transforms.pos != elem.pos {
-                let pos = elem.pos.rotate_around(&container_transforms.pos, container_transforms.rotation);
+                let pos = elem
+                    .pos
+                    .rotate_around(&container_transforms.pos, container_transforms.rotation);
                 element_container.set_pos(pos);
             };
         }
         if element.styles.rotation.is_dirty() || container.dirty_rotation() {
-            let rot =
-                element
-                    .styles
-                    .rotation
-                    .get()
-                    .calc(container_transforms, vp, element_container.get());
+            let rot = element.styles.rotation.get().calc(
+                container_transforms,
+                vp,
+                element_container.get(),
+            );
             element_container.set_rotation(rot);
         }
         // --- TRANSFORMS ---
+
+        let element_container_c = element_container.get();
 
         // --- TRANSFORM-DEPENDENT ---
         let transform_update = element_container.dirty_size()
@@ -178,17 +200,23 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
             || element_container.dirty_rotation();
         if transform_update || element.styles.round.is_dirty() {
             if let Some(rnd) = element.styles.round.get() {
-                let size = rnd.size.calc(container_transforms, vp, element_container.get());
+                let size = rnd.size.calc(container_transforms, vp, element_container_c);
                 let smooth = rnd
                     .smooth
-                    .calc(container_transforms, vp, element_container.get());
+                    .calc(container_transforms, vp, element_container_c);
                 element.instance.round = [size, smooth];
             }
         }
         if transform_update || element.styles.grad_linear.is_dirty() {
             if let Some(grad) = element.styles.grad_linear.fix_dirty_force() {
-                let p1 = grad.p1.0.calc(container_transforms, vp, element_container.get());
-                let p2 = grad.p2.0.calc(container_transforms, vp, element_container.get());
+                let p1 = grad
+                    .p1
+                    .0
+                    .calc(container_transforms, vp, element_container_c);
+                let p2 = grad
+                    .p2
+                    .0
+                    .calc(container_transforms, vp, element_container_c);
                 element.instance.lin_grad_p1 = p1;
                 element.instance.lin_grad_p2 = p2;
                 element.instance.lin_grad_color1 = grad.p1.1.into();
@@ -203,11 +231,11 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                 let p1 = grad
                     .p1
                     .0
-                    .calc_rot(container_transforms, vp, element_container.get());
+                    .calc_rot(container_transforms, vp, element_container_c);
                 let p2 = grad
                     .p2
                     .0
-                    .calc_rot(container_transforms, vp, element_container.get());
+                    .calc_rot(container_transforms, vp, element_container_c);
                 element.instance.rad_grad_p1 = p1;
                 element.instance.rad_grad_p2 = p2;
                 element.instance.rad_grad_color1 = grad.p1.1.into();
@@ -220,6 +248,9 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         // --- TRANSFORM-DEPENDENT ---
 
         // --- TRANSFORM-INDEPENDENT ---
+        if let Some(tint) = element.styles.image_tint.fix_dirty() {
+            element.instance.image_tint = (*tint).into();
+        }
         if element.dirty_styles {
             match element.styles.color.fix_dirty() {
                 None => (),
@@ -374,6 +405,39 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                     }
                     SelectOpts::Lock => self.selection.locked = true,
                     SelectOpts::Unlock => self.selection.locked = false,
+                    SelectOpts::SelectKey(selected_key) => {
+                        let (prev_key, selected_key) = self.selection.select_element(*selected_key);
+                        if let Some(element_key) = selected_key {
+                            self.events.push(ElemEvent {
+                                kind: ElemEvents::Selection {
+                                    state: SelectionStates::Enter,
+                                },
+                                element_key,
+                                msg: None,
+                            });
+                        }
+                        if let Some(element_key) = prev_key {
+                            self.events.push(ElemEvent {
+                                kind: ElemEvents::Selection {
+                                    state: SelectionStates::Leave,
+                                },
+                                element_key,
+                                msg: None,
+                            });
+                        }
+                    }
+                    SelectOpts::NoFocus => {
+                        if let Some(element_key) = self.selection.current {
+                            self.events.push(ElemEvent {
+                                kind: ElemEvents::Selection {
+                                    state: SelectionStates::Leave,
+                                },
+                                element_key,
+                                msg: None,
+                            });
+                        }
+                        self.selection.current = None;
+                    }
                 }
                 return EnvEventStates::Consumed;
             }
@@ -569,7 +633,11 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         self.get_element_mut(k).expect("Unexpected :)").children = Some(children);
     }
 
-    pub fn foreach_element(&self, cb: impl Fn(&Element<Msg, Img>, ElementKey), key: Option<ElementKey>) {
+    pub fn foreach_element(
+        &self,
+        cb: impl Fn(&Element<Msg, Img>, ElementKey),
+        key: Option<ElementKey>,
+    ) {
         let k = match key {
             Some(key) => key,
             None => match self.entry {
@@ -642,7 +710,7 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
     pub fn get_element(&self, k: ElementKey) -> Option<&Element<Msg, Img>> {
         if (k.0 as usize) < self.elements.len() {
             Some(&self.elements[k.0 as usize])
-        }else {
+        } else {
             None
         }
     }
@@ -650,9 +718,25 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
     pub fn get_element_mut(&mut self, k: ElementKey) -> Option<&mut Element<Msg, Img>> {
         if (k.0 as usize) < self.elements.len() {
             Some(&mut self.elements[k.0 as usize])
-        }else {
+        } else {
             None
         }
+    }
+
+    /// # Panic
+    /// 
+    /// May panic if the element does not exist. This is generally safe, since if an element
+    /// does not exist, there is no key for it.
+    pub fn get_element_unchecked(&self, k: ElementKey) -> &Element<Msg, Img> {
+        &self.elements[k.0 as usize]
+    }
+
+    /// # Panic
+    /// 
+    /// May panic if the element does not exist. This is generally safe, since if an element
+    /// does not exist, there is no key for it.
+    pub fn get_element_mut_unchecked(&mut self, k: ElementKey) -> &mut Element<Msg, Img> {
+        &mut self.elements[k.0 as usize]
     }
 
     pub fn set_entry(&mut self, key: ElementKey) {
@@ -719,12 +803,14 @@ impl Selection {
         self.current = None;
         self.selectables.clear();
     }
-    pub fn select_element(&mut self, key: ElementKey) {
+    pub fn select_element(&mut self, key: ElementKey) -> (Option<ElementKey>, Option<ElementKey>) {
+        let result = self.current;
         if self.selectables.contains(&key) {
             self.current = Some(key)
         } else {
             self.current = None
         }
+        (result, self.current)
     }
     pub fn select_element_unchecked(&mut self, key: ElementKey) {
         self.current = Some(key)
@@ -734,10 +820,12 @@ impl Selection {
     }
 }
 
-
-#[cfg(test)] 
+#[cfg(test)]
 mod tests {
-    use std::{num::NonZero, time::{Duration, Instant}};
+    use std::{
+        num::NonZero,
+        time::{Duration, Instant},
+    };
 
     use crate::{Element, Gui};
 
@@ -746,26 +834,24 @@ mod tests {
         let mut init_total = Duration::ZERO;
         let mut step_total = Duration::ZERO;
 
-        for _ in 0..10000 {
-            let mut gui: Gui = Gui::new((
-                NonZero::new(800).unwrap(),
-                NonZero::new(800).unwrap(),
-            ));
-    
+        const ITERATIONS: u32 = 10000;
+
+        for _ in 0..ITERATIONS {
+            let mut gui: Gui = Gui::new((NonZero::new(800).unwrap(), NonZero::new(800).unwrap()));
+
             let mut elem = Element::default();
-    
+
             let mut children = Vec::new();
             for _ in 0..1000 {
                 let elem = Element::default();
-    
-    
+
                 let elem_key = gui.add_element(elem);
                 children.push(elem_key);
             }
             elem.children = Some(children);
-    
+
             let elem_key = gui.add_element(elem);
-    
+
             gui.set_entry(elem_key);
             init_total += measure_task(|| gui.update(), None).1;
             step_total += measure_task(|| gui.update(), None).1;
@@ -774,8 +860,8 @@ mod tests {
         println!("-----------------");
         println!("BENCHMARK END");
         println!("");
-        println!("init avg: {:?}", init_total / 10000);
-        println!("step avg: {:?}", step_total / 10000);
+        println!("init avg: {:?}", init_total / ITERATIONS);
+        println!("step avg: {:?}", step_total / ITERATIONS);
 
         // results
         // initial
@@ -789,7 +875,7 @@ mod tests {
         // replaced HashMap<K, E> with Vec<E>
         // init avg: 4.856µs
         // step avg: 1.432µs
-        // 
+        //
         // nothing
         // init avg: 78.916µs
         // step avg: 15.219µs

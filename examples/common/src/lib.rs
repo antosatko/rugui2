@@ -2,7 +2,7 @@ use std::{num::NonZero, sync::Arc};
 
 use rugui2::Gui;
 pub use rugui2_wgpu;
-use rugui2_wgpu::Rugui2WGPU;
+use rugui2_wgpu::{texture::Texture, Rugui2WGPU};
 pub use rugui2_winit;
 
 pub struct Drawing {
@@ -71,7 +71,7 @@ impl Drawing {
         }
     }
 
-    pub fn draw<Message: Clone>(&self, gui: &mut Gui<Message>, renderer: &mut Rugui2WGPU) {
+    pub fn draw<Message: Clone>(&self, gui: &mut Gui<Message, Texture>, renderer: &mut Rugui2WGPU) {
         if self.size.0 == 0 || self.size.1 == 0 {
             return;
         }
@@ -109,7 +109,7 @@ impl Drawing {
     }
 }
 
-pub fn resize_event<Msg: Clone>(gui: &mut Gui<Msg>, drawing: &mut Drawing, size: (u32, u32)) {
+pub fn resize_event<Msg: Clone>(gui: &mut Gui<Msg, Texture>, drawing: &mut Drawing, size: (u32, u32)) {
     drawing.config.width = size.0;
     drawing.config.height = size.1;
     drawing.size = (size.0, size.1);

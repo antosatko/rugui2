@@ -28,7 +28,8 @@ impl ElementKey {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, bytemuck::Zeroable, bytemuck::Pod)]
+#[cfg_attr(feature = "bytemuck", derive(bytemuck::Zeroable, bytemuck::Pod))]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(C)]
 pub struct ElementInstance {
     pub container: Container,
@@ -44,6 +45,8 @@ pub struct ElementInstance {
     pub rad_grad_p2: Vector,
     pub rad_grad_color1: [f32; 4],
     pub rad_grad_color2: [f32; 4],
+    pub image_tint: [f32; 4],
+    pub image_size: [f32; 2],
 }
 
 
@@ -51,6 +54,7 @@ pub struct ElementInstance {
 pub enum Flags {
     LinearGradient = 0,
     RadialGradient,
+    Image,
     Count,
 }
 
@@ -69,8 +73,8 @@ impl From<Flags> for u32 {
 impl Flags {
     pub const NONE: u64 = 0;
 }
-
-#[derive(Debug, Copy, Clone, PartialEq, Default, bytemuck::Zeroable, bytemuck::Pod)]
+#[cfg_attr(feature = "bytemuck", derive(bytemuck::Zeroable, bytemuck::Pod))]
+#[derive(Debug, Copy, Clone, PartialEq, Default)]
 #[repr(C)]
 pub struct Container {
     pub pos: Vector,
@@ -228,6 +232,8 @@ impl Default for ElementInstance {
             rad_grad_p2: Vector::default(),
             rad_grad_color1: [0.0; 4],
             rad_grad_color2: [0.0; 4],
+            image_size: [0.0; 2],
+            image_tint: [1.0; 4],
         }
     }
 }

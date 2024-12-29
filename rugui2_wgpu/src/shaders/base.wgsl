@@ -1,6 +1,7 @@
 @group(0)@binding(0) var<uniform> screen_size: vec2<f32>;
 
-
+@group(1)@binding(0) var t_diffuse: texture_2d<f32>;
+@group(1)@binding(1) var t_sampler: sampler;
 
 struct VertexInput {
     @builtin(vertex_index) index: u32,
@@ -18,6 +19,8 @@ struct VertexInput {
     @location(10) rad_grad_p1p2: vec4<f32>,
     @location(11) rad_grad_p1_color: vec4<f32>,
     @location(12) rad_grad_p2_color: vec4<f32>,
+    @location(13) texture_tint: vec4<f32>,
+    @location(14) _texture_size: vec2<f32>, // left here for reasosns
 }
 
 struct VertexOutput {
@@ -35,6 +38,8 @@ struct VertexOutput {
     @location(10) @interpolate(flat) rad_grad_p1p2: vec4<f32>,
     @location(11) @interpolate(flat) rad_grad_p1_color: vec4<f32>,
     @location(12) @interpolate(flat) rad_grad_p2_color: vec4<f32>,
+    @location(13) @interpolate(flat) texture_tint: vec4<f32>,
+    @location(14) uv: vec2<f32>,
 }
 
 
@@ -44,6 +49,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
     // Calculate vertex position
     var position = vertex_position(in.index);
+    out.uv = position + 0.5;
     out.color = in.color;
     out.flags = in.flags;
     out.size = in.size * 0.5;
@@ -55,6 +61,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.rad_grad_p1p2 = in.rad_grad_p1p2;
     out.rad_grad_p1_color = in.rad_grad_p1_color;
     out.rad_grad_p2_color = in.rad_grad_p2_color;
+    out.texture_tint = in.texture_tint;
 
     // Scale and rotate the position
     var scale = in.size * position;
@@ -81,9 +88,14 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
 override LIN_GRADIENT: u32;
 override RAD_GRADIENT: u32;
+override TEXTURE: u32;
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0)vec4<f32> {
     var color = in.color;
+    if (in.flags & TEXTURE) != 0 {
+        color = textureSample(t_diffuse, t_sampler, in.uv);
+    }
     if (in.flags & LIN_GRADIENT) != 0 {
         var p1 = in.lin_grad_p1p2.rg;
         var p2 = in.lin_grad_p1p2.ba;

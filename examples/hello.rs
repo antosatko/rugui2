@@ -1,6 +1,6 @@
 use std::{num::NonZero, sync::Arc, time::Instant};
 
-use common::{resize_event, rugui2_wgpu::Rugui2WGPU, rugui2_winit, Drawing};
+use common::{resize_event, rugui2_wgpu::{texture::Texture, Rugui2WGPU}, rugui2_winit, Drawing};
 use rugui2::{
     colors::Colors,
     element::{Element, ElementKey, EventListener},
@@ -27,7 +27,7 @@ pub enum App {
 
 pub struct Program {
     pub window: Arc<Window>,
-    pub gui: Gui,
+    pub gui: Gui<(), Texture>,
     pub rt: Runtime,
     pub element_key: ElementKey,
     pub element_key2: ElementKey,

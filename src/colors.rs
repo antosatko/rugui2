@@ -25,6 +25,15 @@ impl Colors {
     pub const SILVER: Self = Self::FRgba(0.75, 0.75, 0.75, 1.0);
     pub const GOLD: Self = Self::FRgba(1.0, 0.84, 0.0, 1.0);
     pub const BRONZE: Self = Self::FRgba(0.8, 0.5, 0.2, 1.0);
+    pub const ALPHA_FULL: Self = Self::FRgba(1.0, 1.0, 1.0, 1.0);
+    pub const ALPHA_HALF: Self = Self::FRgba(1.0, 1.0, 1.0, 0.5);
+    pub const ALPHA_ZERO: Self = Self::FRgba(1.0, 1.0, 1.0, 0.0);
+}
+
+impl From<f32> for Colors {
+    fn from(value: f32) -> Self {
+        Self::FRgba(1.0, 1.0 , 1.0, value)
+    }
 }
 
 impl From<[f32; 4]> for Colors {
