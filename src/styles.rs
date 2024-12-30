@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::{Colors, Vector};
 
 #[derive(Debug, Clone)]
-pub struct Styles <Img: Clone + ImageData> {
+pub struct Styles<Img: Clone + ImageData> {
     pub width: StyleComponent<Value>,
     pub max_width: StyleComponent<Option<Value>>,
     pub min_width: StyleComponent<Option<Value>>,
@@ -43,11 +43,11 @@ pub enum Style {
 }
 
 #[derive(Clone)]
-pub struct Image <Img: Clone + ImageData> {
+pub struct Image<Img: Clone + ImageData> {
     pub data: Img,
 }
 
-impl <Img: Clone + ImageData> std::fmt::Debug for Image<Img> {
+impl<Img: Clone + ImageData> std::fmt::Debug for Image<Img> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Image")
             .field("size", &self.data.get_size())
@@ -64,7 +64,6 @@ impl ImageData for () {
         (0, 0)
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub struct Gradient {
@@ -98,9 +97,11 @@ pub enum Portion {
 #[derive(Debug, Clone)]
 pub enum Value {
     Px(f32),
+    Time,
     Value(Container, Values, Portion),
     Debug(Box<Value>, Option<String>),
     Add(Box<(Value, Value)>),
+    Mul(Box<(Value, Value)>),
     Negative(Box<Value>),
     Zero,
 }
@@ -122,18 +123,20 @@ pub struct StyleComponent<T: Debug + Clone> {
     dynamic: bool,
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Rotation {
     pub rot: Rotations,
     pub cont: Container,
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub enum Rotations {
     #[default]
     None,
     Deg(f32),
     Rad(f32),
+    CalcDeg(Value),
+    CalcRad(Value),
 }
 
 #[derive(Debug, Copy, Clone, Default)]
@@ -142,9 +145,18 @@ pub enum Container {
     #[default]
     Container,
     This,
+    Image,
 }
 
-impl <Tex: ImageData + Clone> Default for Styles <Tex> {
+pub(crate) struct Containers<'a> {
+    pub container: &'a crate::element::Container,
+    pub vp: &'a crate::element::Container,
+    pub this: &'a crate::element::Container,
+    pub image: &'a Vector,
+    pub time: f32,
+}
+
+impl<Tex: ImageData + Clone> Default for Styles<Tex> {
     fn default() -> Self {
         let val = StyleComponent::new;
         let color = StyleComponent::new;
@@ -198,16 +210,15 @@ impl <Tex: ImageData + Clone> Default for Styles <Tex> {
 impl Value {
     pub(crate) fn calc(
         &self,
-        container: &crate::element::Container,
-        vp: &crate::element::Container,
-        this: &crate::element::Container,
+        containers: &Containers,
     ) -> f32 {
         match self {
             Self::Value(c, v, p) => {
                 let c = match c {
-                    Container::Container => container,
-                    Container::ViewPort => vp,
-                    Container::This => this,
+                    Container::Container => containers.container.size,
+                    Container::ViewPort => containers.vp.size,
+                    Container::This => containers.this.size,
+                    Container::Image => *containers.image,
                 };
                 let p = match p {
                     Portion::Full => 1.0,
@@ -218,27 +229,32 @@ impl Value {
                     Portion::Div(p) => 1.0 / *p,
                 };
                 let v = match v {
-                    Values::Width => c.size.0,
-                    Values::Height => c.size.1,
-                    Values::Diameter => (c.size.0 * c.size.0 + c.size.1 * c.size.1).sqrt(),
-                    Values::Max => c.size.0.max(c.size.1),
-                    Values::Min => c.size.0.min(c.size.1),
-                    Values::Avg => (c.size.0 + c.size.1) / 2.0,
+                    Values::Width => c.0,
+                    Values::Height => c.1,
+                    Values::Diameter => (c.0 * c.0 + c.1 * c.1).sqrt(),
+                    Values::Max => c.0.max(c.1),
+                    Values::Min => c.0.min(c.1),
+                    Values::Avg => (c.0 + c.1) / 2.0,
                 };
                 v * p
             }
             Self::Px(px) => *px,
             Self::Zero => 0.0,
+            Self::Time => containers.time,
             Self::Add(v) => {
                 let v = v.as_ref();
-                v.0.calc(container, vp, this) + v.1.calc(container, vp, this)
+                v.0.calc(containers) + v.1.calc(containers)
+            }
+            Self::Mul(v) => {
+                let v = v.as_ref();
+                v.0.calc(containers) * v.1.calc(containers)
             }
             Self::Debug(v, label) => {
-                let value = v.calc(container, vp, this);
+                let value = v.calc(containers);
                 println!("Style: '{label:?}' = {value}px");
                 value
             }
-            Self::Negative(v) => -v.calc(container, vp, this),
+            Self::Negative(v) => -v.calc(containers),
         }
     }
 }
@@ -256,72 +272,79 @@ impl From<Vector> for Position {
 impl Position {
     pub(crate) fn calc(
         &self,
-        container: &crate::element::Container,
-        vp: &crate::element::Container,
-        this: &crate::element::Container,
+        containers: &Containers,
     ) -> Vector {
         let c = match self.container {
-            Container::Container => container,
-            Container::ViewPort => vp,
-            Container::This => this,
+            Container::Container => containers.container,
+            Container::ViewPort => containers.vp,
+            Container::This => containers.this,
+            Container::Image => &crate::element::Container {
+                pos: containers.container.pos,
+                size: *containers.image,
+                rotation: 0.0,
+            }
         };
 
-        let pos = Vector::new(self.width.calc(c, vp, this), self.height.calc(c, vp, this));
+        let pos = Vector::new(self.width.calc(containers), self.height.calc(containers));
 
         pos - c.size * 0.5 + c.pos
     }
 
-    pub(crate) fn calc_rot(
-        &self,
-        container: &crate::element::Container,
-        vp: &crate::element::Container,
-        this: &crate::element::Container,
-    ) -> Vector {
+    pub(crate) fn calc_rot(&self, containers: &Containers) -> Vector {
         let c = match self.container {
-            Container::Container => container,
-            Container::ViewPort => vp,
-            Container::This => this,
+            Container::Container => containers.container,
+            Container::ViewPort => containers.vp,
+            Container::This => containers.this,
+            Container::Image => &crate::element::Container {
+                pos: containers.container.pos,
+                size: *containers.image,
+                rotation: containers.this.rotation,
+            }
         };
 
-        let x = self.width.calc(c, vp, this);
-        let y = self.height.calc(c, vp, this);
+        let x = self.width.calc(containers);
+        let y = self.height.calc(containers);
         let rot =
             Vector::new(x - c.size.0 * 0.5, y - c.size.1 * 0.5).rotate_around_origin(c.rotation);
 
         Vector::new(c.pos.0, c.pos.1) + rot
     }
 
-    pub fn calc_relative(
+    pub(crate) fn calc_relative(
         &self,
-        container: &crate::element::Container,
-        vp: &crate::element::Container,
-        this: &crate::element::Container,
+        containers: &Containers
     ) -> Vector {
         let c = match self.container {
-            Container::Container => container,
-            Container::ViewPort => vp,
-            Container::This => this,
+            Container::Container => containers.container,
+            Container::ViewPort => containers.vp,
+            Container::This => containers.this,
+            Container::Image => &crate::element::Container {
+                pos: containers.container.pos,
+                size: *containers.image,
+                rotation: 0.0,
+            }
         };
-        Vector::new(self.width.calc(c, vp, this), self.height.calc(c, vp, this)) - c.size * 0.5
+        Vector::new(self.width.calc(containers), self.height.calc(containers)) - c.size * 0.5
     }
 }
 
 impl Rotation {
     pub(crate) fn calc(
         &self,
-        container: &crate::element::Container,
-        vp: &crate::element::Container,
-        this: &crate::element::Container,
+        containers: &Containers
     ) -> f32 {
         let c = match self.cont {
-            Container::Container => container.rotation,
-            Container::ViewPort => vp.rotation,
-            Container::This => this.rotation,
+            Container::Container => containers.container.rotation,
+            Container::ViewPort => containers.vp.rotation,
+            Container::This => containers.this.rotation,
+            Container::Image => 0.0,
         };
-        match self.rot {
+        match &self.rot {
             Rotations::None => c,
             Rotations::Deg(v) => c + v.to_radians(),
             Rotations::Rad(v) => c + v,
+            Rotations::CalcDeg(val) => c + val.calc(containers).to_radians(),
+            Rotations::CalcRad(val) => c + val.calc(containers),
         }
     }
 }

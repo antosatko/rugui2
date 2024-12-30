@@ -72,6 +72,36 @@ impl Vector {
     }
 }
 
+impl From<(f32, f32)> for Vector {
+    fn from(value: (f32, f32)) -> Self {
+        Self(value.0, value.1)
+    }
+}
+
+impl From<Vector> for (f32, f32) {
+    fn from(value: Vector) -> Self {
+        (value.0, value.1)
+    }
+}
+
+impl From<[f32; 2]> for Vector {
+    fn from(value: [f32; 2]) -> Self {
+        Self(value[0], value[1])
+    }
+}
+
+impl From<Vector> for [f32; 2] {
+    fn from(value: Vector) -> Self {
+        [value.0, value.1]
+    }
+}
+
+impl From<(u32, u32)> for Vector {
+    fn from(value: (u32, u32)) -> Self {
+        Self(value.0 as f32, value.1 as f32)
+    }
+}
+
 impl Add<Vector> for Vector {
     type Output = Self;
 

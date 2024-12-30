@@ -92,11 +92,26 @@ override TEXTURE: u32;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0)vec4<f32> {
-    var color = in.color;
-    if (in.flags & TEXTURE) != 0 {
-        color = textureSample(t_diffuse, t_sampler, in.uv);
+    const gamma_exp = 1.0;
+    const gamma_mul = 1.0;
+    var color = vec3(0.0);
+    var max_alpha = 0.0;
+    if bool(in.flags & TEXTURE) {
+        var c = textureSample(t_diffuse, t_sampler, in.uv) * in.texture_tint;
+        color = mix(color, c.rgb, c.a);
+        max_alpha = max(max_alpha, c.a);
     }
-    if (in.flags & LIN_GRADIENT) != 0 {
+    if bool(in.flags & RAD_GRADIENT) {
+        var p1 = in.rad_grad_p1p2.rg;
+        var p2 = in.rad_grad_p1p2.ba;
+        var p1color = in.rad_grad_p1_color;
+        var p2color = in.rad_grad_p2_color;
+        
+        var c = mix(p1color, p2color, distance(p1, in.pixel_pos) / distance(p1, p2));
+        color = mix(color, c.rgb, c.a);
+        max_alpha = max(max_alpha, c.a);
+    }
+    if bool(in.flags & LIN_GRADIENT) {
         var p1 = in.lin_grad_p1p2.rg;
         var p2 = in.lin_grad_p1p2.ba;
         var p1color = in.lin_grad_p1_color;
@@ -104,24 +119,19 @@ fn fs_main(in: VertexOutput) -> @location(0)vec4<f32> {
 
         var gradient_factor = dot(in.pixel_pos - p1, p2 - p1) / dot(p2 - p1, p2 - p1);
         var c = mix(p1color, p2color, clamp(gradient_factor, 0.0, 1.0));
-        color = c;
+        color = mix(color, c.rgb, c.a);
+        max_alpha = max(max_alpha, c.a);
     }
-    if (in.flags & RAD_GRADIENT) != 0 {
-        var p1 = in.rad_grad_p1p2.rg;
-        var p2 = in.rad_grad_p1p2.ba;
-        var p1color = in.rad_grad_p1_color;
-        var p2color = in.rad_grad_p2_color;
-        
-        color = mix(p1color, p2color, distance(p1, in.pixel_pos) / distance(p1, p2));
-    }
+    color = mix(color, in.color.rgb, in.color.a);
+    max_alpha = max(max_alpha, in.color.a);
     var pos_abs = abs(in.pixel_size);
     if pos_abs.x > (in.size.x - in.round.x) && pos_abs.y > (in.size.y - in.round.x) {
         let the_d = distance(pos_abs, in.size - in.round.x);
         if the_d > in.round.x {
-            color.a *= clamp(1.0-((the_d - in.round.x) / in.round.y), 0.0, 1.0);
+            max_alpha *= clamp(1.0-((the_d - in.round.x) / in.round.y), 0.0, 1.0);
         }
     }
-    return vec4(color.rgb, color.a * in.alpha);
+    return pow(vec4(color, max_alpha * in.alpha), vec4(gamma_exp))*gamma_mul;
 }
 
 fn vertex_position(vertex_index: u32) -> vec2<f32> {

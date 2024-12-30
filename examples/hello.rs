@@ -182,7 +182,7 @@ impl ApplicationHandler for App {
                 let start = std::time::Instant::now();
                 //println!("FPS: {:?}", 1.0 / this.frame_start.elapsed().as_secs_f64());
                 //this.frame_start = Instant::now();
-                this.gui.update();
+                this.gui.update(0.0);
                 println!("update took: {:?}", start.elapsed());
                 this.t += 1;
                 //println!("t: {}", this.t);

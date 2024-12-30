@@ -50,7 +50,7 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         self.viewport.set_pos(s * 0.5);
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, time: f32) {
         let entry = match self.entry {
             Some(e) => e,
             None => return,
@@ -61,12 +61,12 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         let vp = vp_copy.get();
 
         self.selection.selectables.clear();
-        self.update_element(entry, container, vp);
+        self.update_element(entry, container, vp, time);
 
         self.viewport.clean();
     }
 
-    fn update_element(&mut self, key: ElementKey, container: &ContainerWrapper, vp: &Container) {
+    fn update_element(&mut self, key: ElementKey, container: &ContainerWrapper, vp: &Container, time: f32) {
         let element = &mut self.elements[key.0 as usize];
 
         if element.allow_select {
@@ -91,7 +91,20 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                 }
             }
         }
+        let image = &element.instance.image_size.into();
         // --- CONTENT-CONTAINERS ---
+
+        macro_rules! make_containers {
+            () => {
+                &Containers {
+                    container: container_transforms,
+                    vp,
+                    this: element_container.get(),
+                    image,
+                    time,
+                }
+            };
+        }
 
 
         // --- TRANSFORMS ---
@@ -106,13 +119,14 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
             let width = element.styles.width.fix_dirty_force();
             let max = element.styles.max_width.fix_dirty_force();
             let min = element.styles.min_width.fix_dirty_force();
+            let containers = make_containers!();
 
-            let mut width = width.calc(container_transforms, vp, element_container.get());
+            let mut width = width.calc(containers);
             if let Some(max) = max {
-                width = width.min(max.calc(container_transforms, vp, element_container.get()));
+                width = width.min(max.calc(containers));
             }
             if let Some(min) = min {
-                width = width.max(min.calc(container_transforms, vp, element_container.get()));
+                width = width.max(min.calc(containers));
             }
 
             if element_container.get().size.0 != width {
@@ -128,13 +142,14 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
             let style = element.styles.height.fix_dirty_force();
             let max = element.styles.max_height.fix_dirty_force();
             let min = element.styles.min_height.fix_dirty_force();
+            let containers = make_containers!();
 
-            let mut height = style.calc(container_transforms, vp, element_container.get());
+            let mut height = style.calc(containers);
             if let Some(max) = max {
-                height = height.min(max.calc(container_transforms, vp, element_container.get()));
+                height = height.min(max.calc(containers));
             }
             if let Some(min) = min {
-                height = height.max(min.calc(container_transforms, vp, element_container.get()));
+                height = height.max(min.calc(containers));
             }
 
             if element_container.get().size.1 != height {
@@ -153,18 +168,15 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
             || element.styles.center.is_dirty()
         {
             element_container.set_pos(container_transforms.pos);
+            let containers = make_containers!();
 
             let center =
                 element
                     .styles
                     .center
                     .get()
-                    .calc(container_transforms, vp, element_container.get());
-            let align = element.styles.align.get().calc_relative(
-                container_transforms,
-                vp,
-                element_container.get(),
-            );
+                    .calc(containers);
+            let align = element.styles.align.get().calc_relative(containers);
 
             element_container.set_pos(center - align);
         }
@@ -183,16 +195,26 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
             };
         }
         if element.styles.rotation.is_dirty() || container.dirty_rotation() {
-            let rot = element.styles.rotation.get().calc(
-                container_transforms,
-                vp,
-                element_container.get(),
-            );
+            let containers = make_containers!();
+            let rot = element.styles.rotation.get().calc(containers);
             element_container.set_rotation(rot);
         }
         // --- TRANSFORMS ---
 
         let element_container_c = element_container.get();
+
+        macro_rules! make_containers {
+            () => {
+                &Containers {
+                    container: container_transforms,
+                    vp,
+                    this: element_container_c,
+                    image,
+                    time,
+                }
+            };
+        }
+        let containers = make_containers!();
 
         // --- TRANSFORM-DEPENDENT ---
         let transform_update = element_container.dirty_size()
@@ -200,10 +222,10 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
             || element_container.dirty_rotation();
         if transform_update || element.styles.round.is_dirty() {
             if let Some(rnd) = element.styles.round.get() {
-                let size = rnd.size.calc(container_transforms, vp, element_container_c);
+                let size = rnd.size.calc(containers);
                 let smooth = rnd
                     .smooth
-                    .calc(container_transforms, vp, element_container_c);
+                    .calc(containers);
                 element.instance.round = [size, smooth];
             }
         }
@@ -212,11 +234,11 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                 let p1 = grad
                     .p1
                     .0
-                    .calc(container_transforms, vp, element_container_c);
+                    .calc(containers);
                 let p2 = grad
                     .p2
                     .0
-                    .calc(container_transforms, vp, element_container_c);
+                    .calc(containers);
                 element.instance.lin_grad_p1 = p1;
                 element.instance.lin_grad_p2 = p2;
                 element.instance.lin_grad_color1 = grad.p1.1.into();
@@ -231,11 +253,11 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                 let p1 = grad
                     .p1
                     .0
-                    .calc_rot(container_transforms, vp, element_container_c);
+                    .calc_rot(containers);
                 let p2 = grad
                     .p2
                     .0
-                    .calc_rot(container_transforms, vp, element_container_c);
+                    .calc_rot(containers);
                 element.instance.rad_grad_p1 = p1;
                 element.instance.rad_grad_p2 = p2;
                 element.instance.rad_grad_color1 = grad.p1.1.into();
@@ -310,7 +332,7 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
 
         if let Some(children) = element.children.take() {
             for child in &children {
-                self.update_element(*child, &element_container, vp);
+                self.update_element(*child, &element_container, vp, time);
             }
             self.elements[key.0 as usize].children = Some(children);
         }
@@ -358,7 +380,6 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                                 msg: None,
                             });
                         }
-                        println!("{:?}", self.selection.selectables);
                         if let Some(key) = self.selection.next() {
                             self.events.push(ElemEvent {
                                 kind: ElemEvents::Selection {
@@ -820,6 +841,8 @@ impl Selection {
     }
 }
 
+
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -853,8 +876,8 @@ mod tests {
             let elem_key = gui.add_element(elem);
 
             gui.set_entry(elem_key);
-            init_total += measure_task(|| gui.update(), None).1;
-            step_total += measure_task(|| gui.update(), None).1;
+            init_total += measure_task(|| gui.update(0.0), None).1;
+            step_total += measure_task(|| gui.update(0.0), None).1;
         }
 
         println!("-----------------");

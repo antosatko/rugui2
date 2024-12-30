@@ -5,7 +5,7 @@ use common::{
     rugui2_wgpu::{Rugui2WGPU, texture::Texture},
     rugui2_winit, Drawing,
 };
-use image::{EncodableLayout, GenericImageView};
+use image::EncodableLayout;
 use rugui2::{
     colors::Colors,
     element::{Element, ElementKey, EventListener},
@@ -38,8 +38,7 @@ pub struct Program {
     pub element_key: ElementKey,
     pub drawing: Drawing,
     pub renderer: Rugui2WGPU,
-    pub t: u64,
-    pub frame_start: Instant,
+    pub program_start: Instant,
     pub text_fields: HashMap<ElementKey, String>,
 }
 
@@ -76,7 +75,7 @@ impl ApplicationHandler for App {
         }));
         elem.styles_mut().rotation.set(Rotation{
             cont: Container::This,
-            rot: rugui2::styles::Rotations::Deg(0.01),
+            rot: rugui2::styles::Rotations::CalcDeg(Value::Time),
         });
         elem.styles_mut().round.set(Some(Round{
             size: Value::Px(100.0),
@@ -132,8 +131,7 @@ impl ApplicationHandler for App {
             element_key,
             drawing,
             renderer,
-            t: 0,
-            frame_start: Instant::now(),
+            program_start: Instant::now(),
             text_fields,
         };
         *self = Self::Running(program)
@@ -162,12 +160,10 @@ impl ApplicationHandler for App {
                         }
                         // println!("selected: {}", e.element_key.raw());
                         let e = this.gui.get_element_mut(e.element_key).unwrap();
-                        e.styles_mut().color.set(Colors::ORANGE);
+                        e.styles_mut().color.set(Colors::FRgba(1.0, 0.0, 0.0, 0.5));
                     }
                     SelectionStates::Leave => {
-                        if let Some(txt) = this.text_fields.get(&e.element_key) {
-                            this.window.set_title(&txt);
-                        }
+                        this.window.set_title("");
                         // println!("unselected: {}", e.element_key.raw());
                         let e = this.gui.get_element_mut(e.element_key).unwrap();
                         e.styles_mut().color.set(Colors::TRANSPARENT);
@@ -197,7 +193,7 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                this.gui.update();
+                this.gui.update(this.program_start.elapsed().as_secs_f32());
                 this.renderer.prepare(&mut this.gui, &this.drawing.queue);
                 this.drawing.draw(&mut this.gui, &mut this.renderer);
                 this.window.request_redraw();
