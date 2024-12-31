@@ -2,7 +2,7 @@ use std::{collections::HashMap, num::NonZero, sync::Arc, time::Instant};
 
 use common::{
     resize_event,
-    rugui2_wgpu::{Rugui2WGPU, texture::Texture},
+    rugui2_wgpu::{texture::Texture, Rugui2WGPU},
     rugui2_winit, Drawing,
 };
 use image::EncodableLayout;
@@ -10,7 +10,7 @@ use rugui2::{
     colors::Colors,
     element::{Element, ElementKey, EventListener},
     events::{ElemEvents, SelectionStates},
-    styles::{Container, Image, Portion, Position, Rotation, Round, Value, Values},
+    styles::{Container, Gradient, Image, Portion, Position, Rotation, Round, Value, Values},
     Gui,
 };
 use tokio::runtime::Runtime;
@@ -61,28 +61,27 @@ impl ApplicationHandler for App {
 
         let mut elem = Element::default();
         elem.label = Some(String::from("Container"));
-        let binding = image::load_from_memory(include_bytes!("imag.png")).unwrap();
-        let image = binding.as_rgba8().unwrap();
-        let dimensions = image.dimensions();
         elem.styles_mut().image.set(Some(Image {
-            data: Texture::from_bytes(
+            data: Texture::from_file(
                 &drawing.device,
                 &drawing.queue,
-                image.as_bytes(),
-                dimensions,
-                Some("BG"),
-            ).unwrap(),
+                "examples/imag.png",
+                Some("BG (bad game)"),
+            )
+            .unwrap(),
         }));
-        elem.styles_mut().rotation.set(Rotation{
+        elem.styles_mut().rotation.set(Rotation {
             cont: Container::This,
             rot: rugui2::styles::Rotations::CalcDeg(Value::Time),
         });
-        elem.styles_mut().round.set(Some(Round{
+        elem.styles_mut().round.set(Some(Round {
             size: Value::Px(100.0),
             smooth: Value::Px(0.0),
         }));
-        
-        const CHILDREN: f32 = 5.0;
+        elem.styles_mut().width.set(Value::Value(Container::Image, Values::Width, Portion::Full));
+        elem.styles_mut().height.set(Value::Value(Container::Image, Values::Height, Portion::Full));
+
+        const CHILDREN: f32 = 0.0;
         let mut children = Vec::new();
         let mut text_fields = HashMap::new();
         for i in 0..CHILDREN as u32 {
@@ -108,6 +107,24 @@ impl ApplicationHandler for App {
                 Values::Height,
                 Portion::Mul(ratio),
             ));
+            styles.grad_linear.set(Some(Gradient {
+                p1: (
+                    Position {
+                        container: Container::This,
+                        width: Value::Zero,
+                        height: Value::Zero,
+                    },
+                    Colors::GREEN.with_alpha(0.3),
+                ),
+                p2: (
+                    Position {
+                        container: Container::This,
+                        width: Value::Zero,
+                        height: Value::Value(Container::This, Values::Height, Portion::Full),
+                    },
+                    Colors::BLUE.with_alpha(0.3),
+                ),
+            }));
 
             child.events.push(EventListener {
                 event: rugui2::events::ElemEventTypes::Click,

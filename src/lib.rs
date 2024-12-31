@@ -234,11 +234,11 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                 let p1 = grad
                     .p1
                     .0
-                    .calc(containers);
+                    .calc_rot(containers);
                 let p2 = grad
                     .p2
                     .0
-                    .calc(containers);
+                    .calc_rot(containers);
                 element.instance.lin_grad_p1 = p1;
                 element.instance.lin_grad_p2 = p2;
                 element.instance.lin_grad_color1 = grad.p1.1.into();
@@ -850,12 +850,13 @@ mod tests {
         time::{Duration, Instant},
     };
 
-    use crate::{Element, Gui};
+    use crate::{Element, Gui, Vector};
 
     #[test]
     pub fn benchmark() {
         let mut init_total = Duration::ZERO;
         let mut step_total = Duration::ZERO;
+        let mut event_total = Duration::ZERO;
 
         const ITERATIONS: u32 = 10000;
 
@@ -878,6 +879,7 @@ mod tests {
             gui.set_entry(elem_key);
             init_total += measure_task(|| gui.update(0.0), None).1;
             step_total += measure_task(|| gui.update(0.0), None).1;
+            event_total += measure_task(|| gui.env_event(crate::EnvEvents::CursorMove { pos: Vector::ZERO }), None).1;
         }
 
         println!("-----------------");
@@ -885,6 +887,7 @@ mod tests {
         println!("");
         println!("init avg: {:?}", init_total / ITERATIONS);
         println!("step avg: {:?}", step_total / ITERATIONS);
+        println!("event avg: {:?}", event_total / ITERATIONS);
 
         // results
         // initial

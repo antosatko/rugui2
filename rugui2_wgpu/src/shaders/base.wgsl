@@ -131,10 +131,11 @@ fn fs_main(in: VertexOutput) -> @location(0)vec4<f32> {
             max_alpha *= clamp(1.0-((the_d - in.round.x) / in.round.y), 0.0, 1.0);
         }
     }
-    return pow(vec4(color, max_alpha * in.alpha), vec4(gamma_exp))*gamma_mul;
+    return vec4(pow(color, vec3(gamma_exp))*gamma_mul, max_alpha * in.alpha);
 }
 
 fn vertex_position(vertex_index: u32) -> vec2<f32> {
+    // i: 0 1 2 3 4 5
     // x: + + - - - +
     // y: + - - - + +
     return vec2<f32>((vec2(1u, 2u) + vertex_index) % vec2(6u) < vec2(3u))-0.5;

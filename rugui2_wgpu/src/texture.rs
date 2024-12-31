@@ -1,7 +1,8 @@
 //! Minimalistic module for textures
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
+use image::{DynamicImage, GenericImageView};
 use rugui2::styles::ImageData;
 
 #[derive(Debug, Clone)]
@@ -151,6 +152,35 @@ impl Texture {
                     sampler,
                     bind_group,
                 })
+    }
+}
+
+#[cfg(feature = "image")]
+impl Texture {
+    pub fn from_dynamic_image(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        image: &DynamicImage,
+        label: Option<&str>
+    ) -> Option<Self> {
+        Self::from_bytes(device, queue, image.as_bytes(), image.dimensions(), label)
+    }
+
+    pub fn from_file(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        path: impl AsRef<std::path::Path>,
+        label: Option<&str>
+    ) -> Option<Self> {
+        let im_data = match std::fs::read(path) {
+            Ok(data) => data,
+            Err(_) => return None,
+        };
+        let image = match image::load_from_memory(&im_data) {
+            Ok(im) => im,
+            Err(_) => return None,
+        };
+        Self::from_dynamic_image(device, queue, &image, label)
     }
 }
 

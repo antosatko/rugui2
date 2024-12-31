@@ -1,4 +1,3 @@
-
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Colors {
     FRgba(f32, f32, f32, f32),
@@ -28,6 +27,13 @@ impl Colors {
     pub const ALPHA_FULL: Self = Self::FRgba(1.0, 1.0, 1.0, 1.0);
     pub const ALPHA_HALF: Self = Self::FRgba(1.0, 1.0, 1.0, 0.5);
     pub const ALPHA_ZERO: Self = Self::FRgba(1.0, 1.0, 1.0, 0.0);
+
+    pub fn with_alpha(&self, alpha: f32) -> Self {
+        match self {
+            Colors::FHsl(_, _, _) => *self,
+            Colors::FRgba(r, g, b, _) => Self::FRgba(*r, *g, *b, alpha),
+        }
+    }
 }
 
 impl From<f32> for Colors {
