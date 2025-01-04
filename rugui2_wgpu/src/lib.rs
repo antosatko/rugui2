@@ -1,15 +1,16 @@
 use std::{collections::HashMap, mem::size_of};
 
-use texture::Texture;
+use texture::{DepthBuffer, Texture};
 use wgpu::{include_wgsl, PipelineLayoutDescriptor, RenderPipelineDescriptor, VertexAttribute};
 
-use rugui2::element::{ElementInstance, Flags};
+use rugui2::element::{ElementInstance, ElementKey, Flags};
 
 pub mod texture;
 
 pub struct Rugui2WGPU {
     pub dimensions_buffer: wgpu::Buffer,
     pub dimensions_bind_group: wgpu::BindGroup,
+    pub depth_buffer: DepthBuffer,
     pub size: (u32, u32),
 
     pub instance_buffer: wgpu::Buffer,
@@ -17,6 +18,7 @@ pub struct Rugui2WGPU {
     dummy_texture: Texture,
 
     pub pipeline: wgpu::RenderPipeline,
+    pub stencil_pipeline: wgpu::RenderPipeline,
 }
 
 impl Rugui2WGPU {
@@ -134,7 +136,8 @@ impl Rugui2WGPU {
 
     pub fn new(queue: &wgpu::Queue, device: &wgpu::Device, size: (u32, u32)) -> Self {
         let dummy_texture =
-            Texture::from_bytes(device, queue, &[0; 4], (1, 1), Some("Rugui2 dummy texture")).unwrap();
+            Texture::from_bytes(device, queue, &[0; 4], (1, 1), Some("Rugui2 dummy texture"))
+                .unwrap();
         let dimensions_bind_group_layout =
             device.create_bind_group_layout(&Self::DIMENSIONS_LAYOUT);
 
@@ -174,6 +177,8 @@ impl Rugui2WGPU {
             mapped_at_creation: false,
         });
 
+        let depth_buffer = DepthBuffer::new(device, size);
+
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Rugui2 Pipeline Layout Descriptor"),
             bind_group_layouts: &[&dimensions_bind_group_layout, &texture_bind_group_layout],
@@ -181,6 +186,13 @@ impl Rugui2WGPU {
         });
 
         let shaders = device.create_shader_module(include_wgsl!("shaders/base.wgsl"));
+
+        let stencil_state = wgpu::StencilFaceState {
+            compare: wgpu::CompareFunction::LessEqual,
+            fail_op: wgpu::StencilOperation::Keep,
+            depth_fail_op: wgpu::StencilOperation::Keep,
+            pass_op: wgpu::StencilOperation::Keep,
+        };
 
         let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
             label: Some("Rugui2 Render Pipeline"),
@@ -224,7 +236,94 @@ impl Rugui2WGPU {
                 conservative: false,
                 ..Default::default()
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Stencil8,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::Always,
+                stencil: wgpu::StencilState {
+                    front: stencil_state,
+                    back: stencil_state,
+                    read_mask: 0xff,
+                    write_mask: 0xff,
+                },
+                bias: wgpu::DepthBiasState {
+                    constant: 0,
+                    slope_scale: 0.0,
+                    clamp: 0.0,
+                },
+            }),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        });
+
+        let stencil_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("Rugui2 Stencil Pipeline Layout Descriptor"),
+            bind_group_layouts: &[&dimensions_bind_group_layout, &texture_bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let stencil_state = wgpu::StencilFaceState {
+            compare: wgpu::CompareFunction::Always,
+            fail_op: wgpu::StencilOperation::Keep,
+            depth_fail_op: wgpu::StencilOperation::Keep,
+            pass_op: wgpu::StencilOperation::Replace,
+        };
+
+        let stencil_shaders = device.create_shader_module(include_wgsl!("shaders/quad.wgsl"));
+
+        let stencil_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("Rugui2 Stencil Render Pipeline"),
+            layout: Some(&stencil_pipeline_layout),
+            vertex: wgpu::VertexState {
+                entry_point: Some("vs_main"),
+                module: &stencil_shaders,
+                buffers: &[Self::VERTEX_BUFFER_LAYOUT],
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    ..Default::default()
+                },
+            },
+            fragment: Some(wgpu::FragmentState {
+                entry_point: Some("fs_main"),
+                module: &stencil_shaders,
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    ..Default::default()
+                },
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::empty(),
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Stencil8,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::Always,
+                stencil: wgpu::StencilState {
+                    front: stencil_state,
+                    back: stencil_state,
+                    read_mask: 0xff,
+                    write_mask: 0xff,
+                },
+                bias: wgpu::DepthBiasState {
+                    constant: 0,
+                    slope_scale: 0.0,
+                    clamp: 0.0,
+                },
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -237,20 +336,39 @@ impl Rugui2WGPU {
         Self {
             dimensions_buffer,
             dimensions_bind_group,
+            depth_buffer,
             size,
             pipeline,
+            stencil_pipeline,
             dummy_texture,
             instance_buffer,
         }
     }
 
-    pub fn resize<Msg: Clone>(&mut self, gui: &mut rugui2::Gui<Msg, Texture>, queue: &wgpu::Queue) {
+    pub fn get_depth_stencil_attachment(&self) -> wgpu::RenderPassDepthStencilAttachment {
+        wgpu::RenderPassDepthStencilAttachment {
+            depth_ops: None,
+            stencil_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(0),
+                store: wgpu::StoreOp::Store,
+            }),
+            view: &self.depth_buffer.view,
+        }
+    }
+
+    pub fn resize<Msg: Clone>(
+        &mut self,
+        gui: &mut rugui2::Gui<Msg, Texture>,
+        queue: &wgpu::Queue,
+        device: &wgpu::Device,
+    ) {
         let size = gui.size();
         if self.size == size {
             return;
         }
         self.size = size;
 
+        self.depth_buffer = DepthBuffer::new(device, size);
         queue.write_buffer(
             &self.dimensions_buffer,
             0,
@@ -258,10 +376,15 @@ impl Rugui2WGPU {
         );
     }
 
-    pub fn prepare<Msg: Clone>(&mut self, gui: &mut rugui2::Gui<Msg, Texture>, queue: &wgpu::Queue) {
-        self.resize(gui, queue);
+    pub fn prepare<Msg: Clone>(
+        &mut self,
+        gui: &mut rugui2::Gui<Msg, Texture>,
+        queue: &wgpu::Queue,
+        device: &wgpu::Device,
+    ) {
+        self.resize(gui, queue, device);
         gui.foreach_element_mut(
-            &mut |e, k| {
+            &mut |e, k, _depth| {
                 queue.write_buffer(
                     &self.instance_buffer,
                     k.raw() * size_of::<ElementInstance>() as u64,
@@ -269,6 +392,7 @@ impl Rugui2WGPU {
                 );
             },
             None,
+            0,
         );
     }
 
@@ -277,19 +401,59 @@ impl Rugui2WGPU {
         gui: &mut rugui2::Gui<Msg, Texture>,
         pass: &mut wgpu::RenderPass<'a>,
     ) {
+        let entry = if let Some(entry) = gui.get_entry() {
+            entry
+        } else {
+            return;
+        };
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.dimensions_bind_group, &[]);
         pass.set_bind_group(1, self.dummy_texture.bind_group.as_ref(), &[]);
         pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
-        gui.foreach_element_mut(
-            &mut |e, k| {
-                if let Some(tex) = e.styles().image.get() {
-                    pass.set_bind_group(1, tex.data.bind_group.as_ref(), &[]);
-                }
-                let i = k.raw() as u32;
-                pass.draw(0..6, i..i + 1);
-            },
-            None,
-        );
+
+        self.render_element(gui, entry, pass, 0);
+    }
+
+    fn render_element<'a, Msg: Clone>(
+        &mut self,
+        gui: &mut rugui2::Gui<Msg, Texture>,
+        key: ElementKey,
+        pass: &mut wgpu::RenderPass<'a>,
+        mut stencil_index: u32,
+    ) {
+        let i = key.raw() as u32;
+        let e = gui.get_element_mut_unchecked(key);
+        let overflow_hidden = Flags::OverflowHidden.contained_in(e.instance().flags);
+
+        if overflow_hidden {
+            pass.set_pipeline(&self.stencil_pipeline);
+            stencil_index += 1;
+            pass.set_stencil_reference(stencil_index);
+            pass.draw(0..6, i..i + 1);
+
+            pass.set_pipeline(&self.pipeline);
+        }
+
+        if let Some(tex) = e.styles().image.get() {
+            pass.set_bind_group(1, tex.data.bind_group.as_ref(), &[]);
+        }
+
+        pass.draw(0..6, i..i + 1);
+
+        if let Some(children) = e.children.take() {
+            for child in &children {
+                self.render_element(gui, *child, pass, stencil_index);
+            }
+            gui.get_element_mut_unchecked(key).children = Some(children);
+        }
+
+        if overflow_hidden {
+            pass.set_pipeline(&self.stencil_pipeline);
+            stencil_index -= 1;
+            pass.set_stencil_reference(stencil_index);
+            pass.draw(0..6, i..i + 1);
+
+            pass.set_pipeline(&self.pipeline);
+        }
     }
 }

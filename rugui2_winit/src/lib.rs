@@ -1,7 +1,7 @@
 use rugui2::{
     events::{EnvEventStates, Key}, math::Vector, styles::ImageData, Gui
 };
-use winit::{dpi::{PhysicalPosition, PhysicalSize}, event::WindowEvent, keyboard::NamedKey};
+use winit::{dpi::PhysicalPosition, event::WindowEvent, keyboard::NamedKey};
 
 pub fn event<Msg: Clone, Img: Clone + ImageData>(winit: &WindowEvent, gui: &mut Gui<Msg, Img>) -> EnvEventStates {
     match winit {

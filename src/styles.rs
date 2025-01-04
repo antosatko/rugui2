@@ -1,25 +1,63 @@
 use std::fmt::Debug;
 
-use crate::{Colors, Vector};
+use crate::{variables::{VarKey, Variables}, Colors, Vector};
 
 #[derive(Debug, Clone)]
 pub struct Styles<Img: Clone + ImageData> {
+    /// Width of the element
     pub width: StyleComponent<Value>,
+    /// Maximum width of the element
     pub max_width: StyleComponent<Option<Value>>,
+    /// Minimum width of the element
     pub min_width: StyleComponent<Option<Value>>,
+    /// Height of the element
     pub height: StyleComponent<Value>,
+    /// Maximum height of the element
     pub max_height: StyleComponent<Option<Value>>,
+    /// Minimum height of the element
     pub min_height: StyleComponent<Option<Value>>,
+    /// Gap between the element and its container
+    pub padding: StyleComponent<Value>,
+    /// Gap between the element and its children
+    pub margin: StyleComponent<Option<Value>>,
+    /// Color of the element
     pub color: StyleComponent<Colors>,
+    /// Rotation of the element
     pub rotation: StyleComponent<Rotation>,
+    /// Round edges
+    /// 
+    /// Describes the radius of edge circle
     pub round: StyleComponent<Option<Round>>,
+    /// Overall opacity of element
     pub alpha: StyleComponent<f32>,
-    pub center: StyleComponent<Position>,
-    pub align: StyleComponent<Position>,
+    /// Position of the Element
+    /// 
+    /// Defaults to the middle of container
+    pub position: StyleComponent<Position>,
+    /// Describes where the origin of the element is
+    /// 
+    /// Defaults to element center
+    pub origin: StyleComponent<Position>,
+    /// Linear gradient
     pub grad_linear: StyleComponent<Option<Gradient>>,
+    /// Radial gradient
     pub grad_radial: StyleComponent<Option<Gradient>>,
+    /// Image
+    /// 
+    /// Images are not part of Rugui2 API, see documentation
+    /// of your drawing layer to learn about their Images
     pub image: StyleComponent<Option<Image<Img>>>,
+    /// Image tint
+    /// 
+    /// Images are not part of Rugui2 API, see documentation
+    /// of your drawing layer to learn about their Images
     pub image_tint: StyleComponent<Colors>,
+    /// Vertical scroll
+    pub scroll_y: StyleComponent<Value>,
+    /// Horizontal scroll
+    pub scroll_x: StyleComponent<Value>,
+    /// Define how to render overflow
+    pub overflow: StyleComponent<Overflow>,
 }
 
 #[derive(Debug)]
@@ -40,7 +78,19 @@ pub enum Style {
     GradRadial,
     Image,
     ImageTint,
+    ScrollY,
+    ScrollX,
+    Overflow,
+    Padding,
+    Margin,
 }
+
+#[derive(Clone, Debug)]
+pub enum Overflow {
+    Shown,
+    Hidden,
+}
+
 
 #[derive(Clone)]
 pub struct Image<Img: Clone + ImageData> {
@@ -81,7 +131,7 @@ pub struct Position {
 #[derive(Debug, Clone)]
 pub struct Round {
     pub size: Value,
-    pub smooth: Value,
+    pub anti_aliasing: Value,
 }
 
 #[derive(Debug, Clone)]
@@ -99,6 +149,8 @@ pub enum Value {
     Px(f32),
     Time,
     Value(Container, Values, Portion),
+    Variable(VarKey),
+    SetVariable(VarKey, Box<Value>),
     Debug(Box<Value>, Option<String>),
     Add(Box<(Value, Value)>),
     Mul(Box<(Value, Value)>),
@@ -167,6 +219,7 @@ impl<Tex: ImageData + Clone> Default for Styles<Tex> {
         let opt_val = StyleComponent::new;
         let opt_grad = StyleComponent::new(None);
         let opt_img = StyleComponent::new(None);
+        let overflow = StyleComponent::new;
         Self {
             width: val(Value::Value(
                 Container::Container,
@@ -189,12 +242,12 @@ impl<Tex: ImageData + Clone> Default for Styles<Tex> {
             }),
             round: opt_rnd(None),
             alpha: float(1.0),
-            center: pos(Position {
+            position: pos(Position {
                 width: Value::Value(Container::Container, Values::Width, Portion::Half),
                 height: Value::Value(Container::Container, Values::Height, Portion::Half),
                 container: Container::Container,
             }),
-            align: pos(Position {
+            origin: pos(Position {
                 width: Value::Value(Container::This, Values::Width, Portion::Half),
                 height: Value::Value(Container::This, Values::Height, Portion::Half),
                 container: Container::This,
@@ -203,6 +256,11 @@ impl<Tex: ImageData + Clone> Default for Styles<Tex> {
             grad_radial: opt_grad,
             image: opt_img,
             image_tint: color(Colors::ALPHA_FULL),
+            scroll_y: val(Value::Zero),
+            scroll_x: val(Value::Zero),
+            overflow: overflow(Overflow::Shown),
+            padding: val(Value::Zero),
+            margin: opt_val(None),
         }
     }
 }
@@ -211,6 +269,7 @@ impl Value {
     pub(crate) fn calc(
         &self,
         containers: &Containers,
+        variables: &mut Variables,
     ) -> f32 {
         match self {
             Self::Value(c, v, p) => {
@@ -240,21 +299,26 @@ impl Value {
             }
             Self::Px(px) => *px,
             Self::Zero => 0.0,
+            Self::Variable(key) => variables.get(*key).unwrap(),
+            Self::SetVariable(key, value) => {
+                let val = value.calc(containers, variables);
+                variables.set(*key, val).unwrap()
+            },
             Self::Time => containers.time,
             Self::Add(v) => {
                 let v = v.as_ref();
-                v.0.calc(containers) + v.1.calc(containers)
+                v.0.calc(containers, variables) + v.1.calc(containers, variables)
             }
             Self::Mul(v) => {
                 let v = v.as_ref();
-                v.0.calc(containers) * v.1.calc(containers)
+                v.0.calc(containers, variables) * v.1.calc(containers, variables)
             }
             Self::Debug(v, label) => {
-                let value = v.calc(containers);
+                let value = v.calc(containers, variables);
                 println!("Style: '{label:?}' = {value}px");
                 value
             }
-            Self::Negative(v) => -v.calc(containers),
+            Self::Negative(v) => -v.calc(containers, variables),
         }
     }
 }
@@ -273,6 +337,7 @@ impl Position {
     pub(crate) fn calc(
         &self,
         containers: &Containers,
+        variables: &mut Variables,
     ) -> Vector {
         let c = match self.container {
             Container::Container => containers.container,
@@ -285,12 +350,13 @@ impl Position {
             }
         };
 
-        let pos = Vector::new(self.width.calc(containers), self.height.calc(containers));
+        let pos = Vector::new(self.width.calc(containers, variables), self.height.calc(containers, variables));
 
         pos - c.size * 0.5 + c.pos
     }
 
-    pub(crate) fn calc_rot(&self, containers: &Containers) -> Vector {
+    pub(crate) fn calc_rot(&self, containers: &Containers,
+        variables: &mut Variables,) -> Vector {
         let c = match self.container {
             Container::Container => containers.container,
             Container::ViewPort => containers.vp,
@@ -302,8 +368,8 @@ impl Position {
             }
         };
 
-        let x = self.width.calc(containers);
-        let y = self.height.calc(containers);
+        let x = self.width.calc(containers, variables);
+        let y = self.height.calc(containers, variables);
         let rot =
             Vector::new(x - c.size.0 * 0.5, y - c.size.1 * 0.5).rotate_around_origin(c.rotation);
 
@@ -312,7 +378,8 @@ impl Position {
 
     pub(crate) fn calc_relative(
         &self,
-        containers: &Containers
+        containers: &Containers,
+        variables: &mut Variables,
     ) -> Vector {
         let c = match self.container {
             Container::Container => containers.container,
@@ -324,14 +391,15 @@ impl Position {
                 rotation: 0.0,
             }
         };
-        Vector::new(self.width.calc(containers), self.height.calc(containers)) - c.size * 0.5
+        Vector::new(self.width.calc(containers, variables), self.height.calc(containers, variables)) - c.size * 0.5
     }
 }
 
 impl Rotation {
     pub(crate) fn calc(
         &self,
-        containers: &Containers
+        containers: &Containers,
+        variables: &mut Variables,
     ) -> f32 {
         let c = match self.cont {
             Container::Container => containers.container.rotation,
@@ -343,8 +411,8 @@ impl Rotation {
             Rotations::None => c,
             Rotations::Deg(v) => c + v.to_radians(),
             Rotations::Rad(v) => c + v,
-            Rotations::CalcDeg(val) => c + val.calc(containers).to_radians(),
-            Rotations::CalcRad(val) => c + val.calc(containers),
+            Rotations::CalcDeg(val) => c + val.calc(containers, variables).to_radians(),
+            Rotations::CalcRad(val) => c + val.calc(containers, variables),
         }
     }
 }
@@ -440,10 +508,10 @@ mod tests {
                 let _ = styles.alpha;
             }
             Style::Center => {
-                let _ = styles.center;
+                let _ = styles.position;
             }
             Style::Align => {
-                let _ = styles.align;
+                let _ = styles.origin;
             }
             Style::MaxHeight => {
                 let _ = styles.max_height;
@@ -469,6 +537,21 @@ mod tests {
             Style::ImageTint => {
                 let _ = styles.image_tint;
             }
+            Style::ScrollY => {
+                let _ = styles.scroll_y;
+            }
+            Style::ScrollX => {
+                let _ = styles.scroll_x;
+            }
+            Style::Overflow => {
+                let _ = styles.overflow;
+            }
+            Style::Padding => {
+                let _ = styles.padding;
+            }
+            Style::Margin => {
+                let _ = styles.margin;
+            }
         }
 
         let Styles {
@@ -478,8 +561,8 @@ mod tests {
             rotation,
             round,
             alpha,
-            center,
-            align,
+            position: center,
+            origin: align,
             max_width,
             min_width,
             max_height,
@@ -488,6 +571,11 @@ mod tests {
             grad_linear,
             image,
             image_tint,
+            scroll_y,
+            scroll_x,
+            overflow,
+            margin,
+            padding,
         } = styles;
         let _ = (width, Style::Width);
         let _ = (height, Style::Height);
@@ -505,5 +593,10 @@ mod tests {
         let _ = (grad_linear, Style::GradLinear);
         let _ = (image, Style::Image);
         let _ = (image_tint, Style::ImageTint);
+        let _ = (scroll_y, Style::ScrollY);
+        let _ = (scroll_x, Style::ScrollX);
+        let _ = (overflow, Style::Overflow);
+        let _ = (padding, Style::Padding);
+        let _ = (margin, Style::Margin);
     }
 }

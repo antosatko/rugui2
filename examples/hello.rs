@@ -1,10 +1,15 @@
 use std::{num::NonZero, sync::Arc, time::Instant};
 
-use common::{resize_event, rugui2_wgpu::{texture::Texture, Rugui2WGPU}, rugui2_winit, Drawing};
+use common::{
+    resize_event,
+    rugui2_wgpu::{texture::Texture, Rugui2WGPU},
+    rugui2_winit, Drawing,
+};
 use rugui2::{
     colors::Colors,
     element::{Element, ElementKey, EventListener},
-    styles::{Container, Gradient, Portion, Position, Rotation, Round, Value, Values},
+    events::ElemEventTypes,
+    styles::{Container, Gradient, Overflow, Portion, Position, Rotation, Round, Value, Values},
     Gui,
 };
 use tokio::runtime::Runtime;
@@ -35,6 +40,7 @@ pub struct Program {
     pub renderer: Rugui2WGPU,
     pub t: u64,
     pub frame_start: Instant,
+    pub program_start: Instant,
 }
 
 impl ApplicationHandler for App {
@@ -73,17 +79,23 @@ impl ApplicationHandler for App {
         });
         elem.styles_mut().round.set(Some(Round {
             size: Value::Value(Container::This, Values::Min, Portion::Half),
-            smooth: Value::Px(0.5),
+            anti_aliasing: Value::Px(50.5),
         }));
+        elem.styles_mut().scroll_y.set(Value::Px(0.0));
+        elem.styles_mut().overflow.set(Overflow::Hidden);
+        elem.events.push(EventListener {
+            event: rugui2::events::ElemEventTypes::Scroll,
+            msg: None,
+            kind: rugui2::events::ListenerTypes::Listen,
+        });
 
         let mut elem2 = Element::default();
         elem2.label = Some(String::from("Second"));
-        elem2.styles_mut().color.set(Colors::GREEN);
-        elem2.styles_mut().width.set(Value::Value(
+        /*elem2.styles_mut().width.set(Value::Value(
             Container::Container,
             Values::Width,
             Portion::Mul(0.65),
-        ));
+        ));*/
         elem2.styles_mut().height.set(Value::Value(
             Container::Container,
             Values::Height,
@@ -91,33 +103,31 @@ impl ApplicationHandler for App {
         ));
         elem2.styles_mut().round.set(Some(Round {
             size: Value::Value(Container::This, Values::Min, Portion::Half),
-            smooth: Value::Px(0.5),
+            anti_aliasing: Value::Px(0.0),
         }));
-        elem2.styles_mut().align.get_mut().height =
-            Value::Value(Container::This, Values::Height, Portion::Full);
+        /*elem2.styles_mut().align.get_mut().height =
+        Value::Value(Container::This, Values::Height, Portion::Full);*/
         elem2.styles_mut().grad_radial.set(Some(Gradient {
             p1: (
                 Position {
-                    width: Value::Value(Container::This, Values::Width, Portion::Half),
-                    height: Value::Value(Container::This, Values::Height, Portion::Half),
+                    width: Value::Value(Container::Container, Values::Width, Portion::Half),
+                    height: Value::Value(Container::Container, Values::Height, Portion::Half),
                     container: Container::This,
                 },
                 Colors::RED,
             ),
             p2: (
                 Position {
-                    width: Value::Value(Container::Container, Values::Width, Portion::Half),
-                    height: Value::Value(Container::Container, Values::Height, Portion::Half),
-                    container: Container::Container,
+                    width: Value::Value(Container::This, Values::Width, Portion::Half),
+                    height: Value::Value(Container::This, Values::Height, Portion::Half),
+                    container: Container::This,
                 },
                 Colors::GREEN,
             ),
         }));
-        elem2.events.push(EventListener {
-            event: rugui2::events::ElemEventTypes::MouseMove,
-            msg: None,
-            kind: rugui2::events::ListenerTypes::Listen,
-        });
+        elem2
+            .events
+            .push(EventListener::new(ElemEventTypes::MouseMove));
         let element_key2 = gui.add_element(elem2);
 
         elem.children = Some(vec![element_key2]);
@@ -134,7 +144,8 @@ impl ApplicationHandler for App {
             drawing,
             renderer,
             t: 0,
-            frame_start: Instant::now()
+            frame_start: Instant::now(),
+            program_start: Instant::now(),
         };
         *self = Self::Running(program)
     }
@@ -155,17 +166,20 @@ impl ApplicationHandler for App {
         while let Some(e) = this.gui.poll_event() {
             match e.kind {
                 rugui2::events::ElemEvents::CursorMove { pos, prev_pos: _ } => {
-                    let elem = this.gui
-                        .get_element_mut(this.element_key2)
-                        .unwrap();
-                    elem
-                        .styles_mut()
-                        .grad_radial
-                        .get_mut()
-                        .as_mut()
-                        .unwrap()
-                        .p1
-                        .0 = (pos + elem.instance().container.size*0.5).into();
+                    let elem = this.gui.get_element_mut(this.element_key2).unwrap();
+                    let size = elem.instance().container.size;
+                    let grad = elem.styles_mut().grad_radial.get_mut().as_mut().unwrap();
+                    grad.p1.0 = (pos + size * 0.5).into();
+                    grad.p2.0 = (pos + size * 0.5 + 50.0).into();
+                }
+                rugui2::events::ElemEvents::Scroll { delta, pos: _ } => {
+                    let elem = this.gui.get_element_mut(e.element_key).unwrap();
+                    match elem.styles_mut().scroll_y.get_mut() {
+                        Value::Px(px) => {
+                            *px += delta.1 * 65.0;
+                        }
+                        _ => (),
+                    }
                 }
                 _ => (),
             }
@@ -182,12 +196,13 @@ impl ApplicationHandler for App {
                 let start = std::time::Instant::now();
                 //println!("FPS: {:?}", 1.0 / this.frame_start.elapsed().as_secs_f64());
                 //this.frame_start = Instant::now();
-                this.gui.update(0.0);
+                this.gui.update(this.program_start.elapsed().as_secs_f32());
                 println!("update took: {:?}", start.elapsed());
                 this.t += 1;
                 //println!("t: {}", this.t);
                 //let start = std::time::Instant::now();
-                this.renderer.prepare(&mut this.gui, &this.drawing.queue);
+                this.renderer
+                    .prepare(&mut this.gui, &this.drawing.queue, &this.drawing.device);
                 println!("prepare took: {:?}", start.elapsed());
                 this.drawing.draw(&mut this.gui, &mut this.renderer);
                 this.window.request_redraw();

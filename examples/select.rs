@@ -5,7 +5,6 @@ use common::{
     rugui2_wgpu::{texture::Texture, Rugui2WGPU},
     rugui2_winit, Drawing,
 };
-use image::EncodableLayout;
 use rugui2::{
     colors::Colors,
     element::{Element, ElementKey, EventListener},
@@ -76,10 +75,16 @@ impl ApplicationHandler for App {
         });
         elem.styles_mut().round.set(Some(Round {
             size: Value::Px(100.0),
-            smooth: Value::Px(0.0),
+            anti_aliasing: Value::Px(0.0),
         }));
-        elem.styles_mut().width.set(Value::Value(Container::Image, Values::Width, Portion::Full));
-        elem.styles_mut().height.set(Value::Value(Container::Image, Values::Height, Portion::Full));
+        elem.styles_mut()
+            .width
+            .set(Value::Value(Container::Image, Values::Width, Portion::Full));
+        elem.styles_mut().height.set(Value::Value(
+            Container::Image,
+            Values::Height,
+            Portion::Full,
+        ));
 
         const CHILDREN: f32 = 0.0;
         let mut children = Vec::new();
@@ -93,7 +98,7 @@ impl ApplicationHandler for App {
 
             let styles = child.styles_mut();
             let ratio = 1.0 / CHILDREN;
-            styles.center.set(Position {
+            styles.position.set(Position {
                 width: Value::Value(Container::Container, Values::Width, Portion::Half),
                 height: Value::Value(
                     Container::Container,
@@ -211,7 +216,7 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 this.gui.update(this.program_start.elapsed().as_secs_f32());
-                this.renderer.prepare(&mut this.gui, &this.drawing.queue);
+                this.renderer.prepare(&mut this.gui, &this.drawing.queue, &this.drawing.device);
                 this.drawing.draw(&mut this.gui, &mut this.renderer);
                 this.window.request_redraw();
             }

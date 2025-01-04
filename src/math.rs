@@ -20,7 +20,7 @@ impl Vector {
     }
 
     /// Rotates the vector around a given point by a specified angle in radians.
-    pub fn rotate_around(&self, point: &Self, angle: f32) -> Self {
+    pub fn rotate_around_point(&self, point: &Self, angle: f32) -> Self {
         let (cx, cy) = (point.0, point.1);
         let (x, y) = (self.0, self.1);
         
@@ -53,7 +53,7 @@ impl Vector {
             return self.rectangle_colision(&c.pos, &c.size).then(|| *self - c.pos)
         }
 
-        let rot = self.rotate_around(&c.pos, -c.rotation);
+        let rot = self.rotate_around_point(&c.pos, -c.rotation);
 
         rot.rectangle_colision(&c.pos, &c.size).then(|| rot - c.pos)
     }
@@ -68,7 +68,12 @@ impl Vector {
             return *self - *pos
         }
 
-        self.rotate_around(pos, rot) - *pos
+        self.rotate_around_point(pos, rot) - *pos
+    }
+
+    #[inline]
+    pub fn is_zero(&self) -> bool {
+        self.0 == 0.0 && self.1 == 0.0
     }
 }
 

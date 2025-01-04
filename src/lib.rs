@@ -5,15 +5,18 @@ use element::{Container, *};
 use events::*;
 use math::*;
 use styles::*;
+use variables::Variables;
 
 pub mod colors;
 pub mod element;
 pub mod events;
 pub mod math;
 pub mod styles;
+pub mod variables;
 
 pub struct Gui<Msg: Clone = (), Img: Clone + ImageData = ()> {
     elements: Vec<Element<Msg, Img>>,
+    pub variables: Variables,
     viewport: ContainerWrapper,
     size: (u32, u32),
     entry: Option<ElementKey>,
@@ -28,6 +31,7 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         let size = (size.0.get(), size.1.get());
         Self {
             elements: Vec::new(),
+            variables: Variables::default(),
             viewport: ContainerWrapper::new_dirty(&Container {
                 pos: Vector::ZERO,
                 size: Vector(size.0 as f32, size.1 as f32),
@@ -61,13 +65,22 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         let vp = vp_copy.get();
 
         self.selection.selectables.clear();
+        self.variables.prepare();
         self.update_element(entry, container, vp, time);
 
         self.viewport.clean();
     }
 
-    fn update_element(&mut self, key: ElementKey, container: &ContainerWrapper, vp: &Container, time: f32) {
+    fn update_element(
+        &mut self,
+        key: ElementKey,
+        container: &ContainerWrapper,
+        vp: &Container,
+        time: f32,
+    ) {
+        let variables = &mut self.variables;
         let element = &mut self.elements[key.0 as usize];
+        let styles = &mut element.styles;
 
         if element.allow_select {
             self.selection.selectables.push(key);
@@ -77,16 +90,15 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         let container_transforms = container.get();
 
         // --- CONTENT-CONTAINERS ---
-        if let Some(image_opt) = element.styles.image.fix_dirty() {
+        if let Some(image_opt) = styles.image.fix_dirty() {
             match image_opt {
                 Some(image) => {
-                    let size = image.data.get_size();
-                    element.instance.image_size = [size.0 as f32, size.1 as f32];
+                    element.instance.image_size = image.data.get_size().into();
 
                     element.instance.set_flag(Flags::Image);
                 }
                 None => {
-                    element.instance.image_size = [0.0, 0.0];
+                    element.instance.image_size = Vector::ZERO;
                     element.instance.remove_flag(Flags::Image);
                 }
             }
@@ -106,27 +118,27 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
             };
         }
 
-
         // --- TRANSFORMS ---
         //
         // SIZE
         //
-        if element.styles.width.is_dirty()
+        if styles.width.is_dirty()
             || container.dirty_size()
-            || element.styles.max_width.is_dirty()
-            || element.styles.min_width.is_dirty()
+            || styles.max_width.is_dirty()
+            || styles.min_width.is_dirty()
+            || styles.padding.is_dirty()
         {
-            let width = element.styles.width.fix_dirty_force();
-            let max = element.styles.max_width.fix_dirty_force();
-            let min = element.styles.min_width.fix_dirty_force();
+            let width = styles.width.fix_dirty_force();
+            let max = styles.max_width.fix_dirty_force();
+            let min = styles.min_width.fix_dirty_force();
             let containers = make_containers!();
 
-            let mut width = width.calc(containers);
+            let mut width = width.calc(containers, variables);
             if let Some(max) = max {
-                width = width.min(max.calc(containers));
+                width = width.min(max.calc(containers, variables));
             }
             if let Some(min) = min {
-                width = width.max(min.calc(containers));
+                width = width.max(min.calc(containers, variables));
             }
 
             if element_container.get().size.0 != width {
@@ -134,27 +146,34 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
             }
         }
 
-        if element.styles.height.is_dirty()
+        if styles.height.is_dirty()
             || container.dirty_size()
-            || element.styles.max_height.is_dirty()
-            || element.styles.min_height.is_dirty()
+            || styles.max_height.is_dirty()
+            || styles.min_height.is_dirty()
+            || styles.padding.is_dirty()
         {
-            let style = element.styles.height.fix_dirty_force();
-            let max = element.styles.max_height.fix_dirty_force();
-            let min = element.styles.min_height.fix_dirty_force();
             let containers = make_containers!();
+            let style = styles.height.fix_dirty_force();
+            let max = styles.max_height.fix_dirty_force();
+            let min = styles.min_height.fix_dirty_force();
 
-            let mut height = style.calc(containers);
+            let mut height = style.calc(containers, variables);
             if let Some(max) = max {
-                height = height.min(max.calc(containers));
+                height = height.min(max.calc(containers, variables));
             }
             if let Some(min) = min {
-                height = height.max(min.calc(containers));
+                height = height.max(min.calc(containers, variables));
             }
 
             if element_container.get().size.1 != height {
                 element_container.size_mut().1 = height;
             }
+        }
+        if element_container.dirty_size() {
+            let size = element_container.get().size;
+            let containers = make_containers!();
+            let padding = styles.padding.fix_dirty_force().calc(containers, variables);
+            element_container.set_size(size - padding);
         }
 
         //
@@ -164,19 +183,14 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         if container.dirty_pos()
             || container.dirty_rotation()
             || container.dirty_size()
-            || element.styles.align.is_dirty()
-            || element.styles.center.is_dirty()
+            || styles.origin.is_dirty()
+            || styles.position.is_dirty()
         {
             element_container.set_pos(container_transforms.pos);
             let containers = make_containers!();
 
-            let center =
-                element
-                    .styles
-                    .center
-                    .get()
-                    .calc(containers);
-            let align = element.styles.align.get().calc_relative(containers);
+            let center = styles.position.get().calc(containers, variables);
+            let align = styles.origin.get().calc_relative(containers, variables);
 
             element_container.set_pos(center - align);
         }
@@ -190,16 +204,23 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
             if container_transforms.rotation != 0.0 && container_transforms.pos != elem.pos {
                 let pos = elem
                     .pos
-                    .rotate_around(&container_transforms.pos, container_transforms.rotation);
+                    .rotate_around_point(&container_transforms.pos, container_transforms.rotation);
                 element_container.set_pos(pos);
             };
         }
-        if element.styles.rotation.is_dirty() || container.dirty_rotation() {
+        if styles.rotation.is_dirty() || container.dirty_rotation() {
             let containers = make_containers!();
-            let rot = element.styles.rotation.get().calc(containers);
+            let rot = styles.rotation.get().calc(containers, variables);
             element_container.set_rotation(rot);
         }
         // --- TRANSFORMS ---
+
+        if element.procedures.len() > 0 {
+            let containers = make_containers!();
+            for procedure in &element.procedures {
+                procedure.calc(containers, variables);
+            }
+        }
 
         let element_container_c = element_container.get();
 
@@ -220,25 +241,17 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         let transform_update = element_container.dirty_size()
             || element_container.dirty_pos()
             || element_container.dirty_rotation();
-        if transform_update || element.styles.round.is_dirty() {
-            if let Some(rnd) = element.styles.round.get() {
-                let size = rnd.size.calc(containers);
-                let smooth = rnd
-                    .smooth
-                    .calc(containers);
+        if transform_update || styles.round.is_dirty() {
+            if let Some(rnd) = styles.round.get() {
+                let size = rnd.size.calc(containers, variables);
+                let smooth = rnd.anti_aliasing.calc(containers, variables);
                 element.instance.round = [size, smooth];
             }
         }
-        if transform_update || element.styles.grad_linear.is_dirty() {
-            if let Some(grad) = element.styles.grad_linear.fix_dirty_force() {
-                let p1 = grad
-                    .p1
-                    .0
-                    .calc_rot(containers);
-                let p2 = grad
-                    .p2
-                    .0
-                    .calc_rot(containers);
+        if transform_update || styles.grad_linear.is_dirty() {
+            if let Some(grad) = styles.grad_linear.fix_dirty_force() {
+                let p1 = grad.p1.0.calc_rot(containers, variables);
+                let p2 = grad.p2.0.calc_rot(containers, variables);
                 element.instance.lin_grad_p1 = p1;
                 element.instance.lin_grad_p2 = p2;
                 element.instance.lin_grad_color1 = grad.p1.1.into();
@@ -248,16 +261,10 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                 element.instance.remove_flag(Flags::LinearGradient);
             }
         }
-        if transform_update || element.styles.grad_radial.is_dirty() {
-            if let Some(grad) = element.styles.grad_radial.fix_dirty_force() {
-                let p1 = grad
-                    .p1
-                    .0
-                    .calc_rot(containers);
-                let p2 = grad
-                    .p2
-                    .0
-                    .calc_rot(containers);
+        if transform_update || styles.grad_radial.is_dirty() {
+            if let Some(grad) = styles.grad_radial.fix_dirty_force() {
+                let p1 = grad.p1.0.calc_rot(containers, variables);
+                let p2 = grad.p2.0.calc_rot(containers, variables);
                 element.instance.rad_grad_p1 = p1;
                 element.instance.rad_grad_p2 = p2;
                 element.instance.rad_grad_color1 = grad.p1.1.into();
@@ -270,35 +277,40 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         // --- TRANSFORM-DEPENDENT ---
 
         // --- TRANSFORM-INDEPENDENT ---
-        if let Some(tint) = element.styles.image_tint.fix_dirty() {
+        if let Some(tint) = styles.image_tint.fix_dirty() {
             element.instance.image_tint = (*tint).into();
         }
         if element.dirty_styles {
-            match element.styles.color.fix_dirty() {
-                None => (),
-                Some(c) => element.instance.color = (*c).into(),
+            if let Some(c) = styles.color.fix_dirty() {
+                element.instance.color = (*c).into()
             }
-            match element.styles.alpha.fix_dirty() {
-                None => (),
-                Some(a) => element.instance.alpha = *a,
+            if let Some(a) = styles.alpha.fix_dirty() {
+                element.instance.alpha = *a
             }
+            match styles.overflow.fix_dirty() {
+                Some(Overflow::Hidden) => element.instance.set_flag(Flags::OverflowHidden),
+                Some(Overflow::Shown) => element.instance.remove_flag(Flags::OverflowHidden),
+                None => (),
+            }
+
             element.dirty_styles = false;
         }
+
         // --- TRANSFORM-INDEPENDENT ---
 
         let last = element.instance.container.clone();
         element
             .instance
             .container
-            .clone_from(element_container.get());
+            .clone_from(element_container_c);
 
         // --- EVENTS ---
         if transform_update {
-            let over_last = self.cursor.last.container_colision(&last);
+            /*let over_last = self.cursor.last.container_colision(&last);
             let over_current = self
                 .cursor
                 .current
-                .container_colision(element_container.get());
+                .container_colision(element_container_c);*/
 
             /*match (over_last, over_current) {
                 (Some(last), None) => {
@@ -329,6 +341,37 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
             }*/
         }
         // --- EVENTS ---
+
+        // --- PREPARE-NEXT-ELEMENTS ---
+        if transform_update || styles.scroll_y.is_dirty() {
+            let scroll = styles
+                .scroll_y
+                .fix_dirty_force()
+                .calc(containers, variables);
+            element.instance.scroll.1 = scroll;
+        }
+        if transform_update || styles.scroll_x.is_dirty() {
+            let containers = make_containers!();
+            let scroll = styles
+                .scroll_x
+                .fix_dirty_force()
+                .calc(containers, variables);
+            element.instance.scroll.0 = scroll;
+        }
+        if let Some(margin) = styles.margin.fix_dirty_force() {
+            let margin = margin.calc(containers, variables);
+            let size = element_container.get().size;
+            element_container.set_size(size - margin);
+        }
+        if !element.instance.scroll.is_zero() {
+            let cont = element_container.get();
+            let angle = cont.rotation;
+            let origin = cont.pos;
+            let displaced = origin + element.instance.scroll.rotate_around_origin(angle);
+
+            element_container.set_pos(displaced);
+        }
+        // --- PREPARE-NEXT-ELEMENTS ---
 
         if let Some(children) = element.children.take() {
             for child in &children {
@@ -629,8 +672,9 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
 
     pub fn foreach_element_mut(
         &mut self,
-        cb: &mut impl FnMut(&mut Element<Msg, Img>, ElementKey),
+        cb: &mut impl FnMut(&mut Element<Msg, Img>, ElementKey, u32),
         key: Option<ElementKey>,
+        depth: u32,
     ) {
         let k = match key {
             Some(key) => key,
@@ -639,25 +683,24 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                 None => return,
             },
         };
-        let e = match self.get_element_mut(k) {
-            Some(e) => e,
-            None => return,
-        };
-        cb(e, k);
+        let e = &mut self.elements[k.raw() as usize];
+        cb(e, k, depth);
         let children = match e.children.take() {
             Some(children) => children,
             None => return,
         };
         for child in &children {
-            self.foreach_element_mut(cb, Some(*child));
+            self.foreach_element_mut(cb, Some(*child), depth + 1);
         }
         self.get_element_mut(k).expect("Unexpected :)").children = Some(children);
     }
 
-    pub fn foreach_element(
-        &self,
-        cb: impl Fn(&Element<Msg, Img>, ElementKey),
+    pub fn foreach_element_mut_two_sided(
+        &mut self,
+        left: &mut impl FnMut(&mut Element<Msg, Img>, ElementKey, u32, bool),
+        right: &mut impl FnMut(&mut Element<Msg, Img>, ElementKey, u32),
         key: Option<ElementKey>,
+        depth: u32,
     ) {
         let k = match key {
             Some(key) => key,
@@ -666,17 +709,41 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                 None => return,
             },
         };
-        let e = match self.get_element(k) {
-            Some(e) => e,
+        let e = &mut self.elements[k.raw() as usize];
+        left(e, k, depth, e.children.is_some());
+        let children = match e.children.take() {
+            Some(children) => children,
             None => return,
         };
-        cb(e, k);
+        for child in &children {
+            self.foreach_element_mut_two_sided(left, right, Some(*child), depth + 1);
+        }
+        self.get_element_mut(k).expect("Unexpected :)").children = Some(children);
+        let e = &mut self.elements[k.raw() as usize];
+        right(e, k, depth);
+    }
+
+    pub fn foreach_element(
+        &self,
+        cb: impl Fn(&Element<Msg, Img>, ElementKey, u32),
+        key: Option<ElementKey>,
+        depth: u32,
+    ) {
+        let k = match key {
+            Some(key) => key,
+            None => match self.entry {
+                Some(key) => key,
+                None => return,
+            },
+        };
+        let e = &self.elements[k.raw() as usize];
+        cb(e, k, depth);
         let children = match e.children.clone() {
             Some(children) => children,
             None => return,
         };
         for child in &children {
-            self.foreach_element(&cb, Some(*child));
+            self.foreach_element(&cb, Some(*child), depth + 1);
         }
     }
 
@@ -745,7 +812,7 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
     }
 
     /// # Panic
-    /// 
+    ///
     /// May panic if the element does not exist. This is generally safe, since if an element
     /// does not exist, there is no key for it.
     pub fn get_element_unchecked(&self, k: ElementKey) -> &Element<Msg, Img> {
@@ -753,7 +820,7 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
     }
 
     /// # Panic
-    /// 
+    ///
     /// May panic if the element does not exist. This is generally safe, since if an element
     /// does not exist, there is no key for it.
     pub fn get_element_mut_unchecked(&mut self, k: ElementKey) -> &mut Element<Msg, Img> {
@@ -762,6 +829,10 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
 
     pub fn set_entry(&mut self, key: ElementKey) {
         self.entry = Some(key)
+    }
+
+    pub fn get_entry(&mut self) -> Option<ElementKey> {
+        self.entry
     }
 
     pub fn size(&self) -> (u32, u32) {
@@ -841,8 +912,6 @@ impl Selection {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use std::{
@@ -879,7 +948,11 @@ mod tests {
             gui.set_entry(elem_key);
             init_total += measure_task(|| gui.update(0.0), None).1;
             step_total += measure_task(|| gui.update(0.0), None).1;
-            event_total += measure_task(|| gui.env_event(crate::EnvEvents::CursorMove { pos: Vector::ZERO }), None).1;
+            event_total += measure_task(
+                || gui.env_event(crate::EnvEvents::CursorMove { pos: Vector::ZERO }),
+                None,
+            )
+            .1;
         }
 
         println!("-----------------");

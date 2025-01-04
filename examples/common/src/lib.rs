@@ -97,7 +97,7 @@ impl Drawing {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(renderer.get_depth_stencil_attachment()),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });

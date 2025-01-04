@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::{ElemEventTypes, ImageData, ListenerTypes, Styles, Vector};
+use crate::{ElemEventTypes, ImageData, ListenerTypes, Styles, Value, Vector};
 
 pub struct Element<Msg: Clone, Img: Clone + ImageData> {
     pub label: Option<String>,
@@ -9,14 +9,9 @@ pub struct Element<Msg: Clone, Img: Clone + ImageData> {
     pub(crate) instance: ElementInstance,
     pub(crate) styles: Styles<Img>,
     pub(crate) dirty_styles: bool,
+    pub procedures: Vec<Value>,
     pub allow_select: bool,
     pub allow_text_input: bool,
-}
-
-pub struct EventListener<Msg: Clone> {
-    pub event: ElemEventTypes,
-    pub msg: Option<Msg>,
-    pub kind: ListenerTypes,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
@@ -37,24 +32,31 @@ pub struct ElementInstance {
     pub flags: u32,
     pub round: [f32; 2],
     pub alpha: f32,
+    /// x, y
     pub lin_grad_p1: Vector,
+    /// x, y
     pub lin_grad_p2: Vector,
     pub lin_grad_color1: [f32; 4],
     pub lin_grad_color2: [f32; 4],
+    /// x, y
     pub rad_grad_p1: Vector,
+    /// x, y
     pub rad_grad_p2: Vector,
     pub rad_grad_color1: [f32; 4],
     pub rad_grad_color2: [f32; 4],
     pub image_tint: [f32; 4],
-    pub image_size: [f32; 2],
+    pub image_size: Vector,
+    pub scroll: Vector,
 }
 
 
-#[repr(u8)]
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Flags {
     LinearGradient = 0,
     RadialGradient,
     Image,
+    OverflowHidden,
     Count,
 }
 
@@ -72,7 +74,18 @@ impl From<Flags> for u32 {
 
 impl Flags {
     pub const NONE: u64 = 0;
+
+    #[inline]
+    pub fn contained_in(self, flags: u32) -> bool {
+        flags & self.into_u32() > 0
+    }
+
+    #[inline]
+    pub fn into_u32(self) -> u32 {
+        1 << self as u32
+    }
 }
+
 #[cfg_attr(feature = "bytemuck", derive(bytemuck::Zeroable, bytemuck::Pod))]
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
 #[repr(C)]
@@ -113,6 +126,7 @@ impl<Msg: Clone, Img: Clone + ImageData> Default for Element<Msg, Img> {
             children: None,
             instance: ElementInstance::default(),
             styles: Styles::default(),
+            procedures: Vec::new(),
             dirty_styles: true,
             allow_select: false,
             allow_text_input: false,
@@ -232,8 +246,9 @@ impl Default for ElementInstance {
             rad_grad_p2: Vector::default(),
             rad_grad_color1: [0.0; 4],
             rad_grad_color2: [0.0; 4],
-            image_size: [0.0; 2],
+            image_size: Vector::ZERO,
             image_tint: [1.0; 4],
+            scroll: Vector::ZERO,
         }
     }
 }
@@ -245,5 +260,27 @@ impl ElementInstance {
 
     pub fn remove_flag(&mut self, flag: Flags) {
         self.flags &= !u32::from(flag);
+    }
+}
+
+pub struct EventListener<Msg: Clone = ()> {
+    pub event: ElemEventTypes,
+    pub msg: Option<Msg>,
+    pub kind: ListenerTypes,
+}
+
+impl <Msg: Clone> EventListener<Msg> {
+    pub fn new(event: ElemEventTypes) -> Self {
+        Self { event, msg: None, kind: ListenerTypes::Listen }
+    }
+
+    pub fn with_kind(mut self, kind: ListenerTypes) -> Self {
+        self.kind = kind;
+        self
+    }
+    
+    pub fn with_msg(mut self, msg: Msg) -> Self {
+        self.msg = Some(msg);
+        self
     }
 }
