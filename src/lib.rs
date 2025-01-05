@@ -608,7 +608,6 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                                 element_key: key,
                                 msg: listener.msg.clone(),
                             });
-                            Self::fix_event_state(state, &listener.kind);
                         }
                     }
                     (false, true) => {
@@ -619,7 +618,6 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                                 element_key: key,
                                 msg: listener.msg.clone(),
                             });
-                            Self::fix_event_state(state, &listener.kind);
                         }
                     }
                     _ => (),

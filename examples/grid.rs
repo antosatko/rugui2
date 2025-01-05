@@ -167,11 +167,11 @@ impl ApplicationHandler for App {
                 styles.height.set(Value::Variable(height_var));
 
                 styles.color.set(Colors::RED);
-                styles.padding.set(Value::Value(
+                /*styles.padding.set(Value::Value( // it works now even without this yaaay
                     Container::This,
                     Values::Min,
                     Portion::Mul(0.1),
-                ));
+                ));*/
                 styles.round.set(Some(Round {
                     size: Value::Px(50.0),
                     anti_aliasing: Value::Px(0.0),
