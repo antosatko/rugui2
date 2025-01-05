@@ -27,10 +27,86 @@ pub enum EnvEvents {
     KeyPress {
         key: Key,
         press: bool,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub enum EnvEventCategories {
+    /// This event uses the current cursor position
+    Positioned,
+    /// This event uses both current and last cursor positions
+    DoublePosition,
+    /// This event does not need to traverse elements
+    Once,
+    /// This event traverses all active elements
+    Global,
+}
+
+#[derive(Clone)]
+pub struct EventListeners<Msg: Clone> {
+    pub(crate) mouse_move: Vec<EventListener<Msg>>,
+    pub(crate) click: Vec<EventListener<Msg>>,
+    pub(crate) hover: Vec<EventListener<Msg>>,
+    pub(crate) scroll: Vec<EventListener<Msg>>,
+    pub(crate) file_drop: Vec<EventListener<Msg>>,
+    pub(crate) text_input: Vec<EventListener<Msg>>,
+    pub(crate) key_press: Vec<EventListener<Msg>>,
+}
+
+impl<Msg: Clone> EventListeners<Msg> {
+    pub fn new() -> Self {
+        Self {
+            mouse_move: Vec::with_capacity(0),
+            click: Vec::with_capacity(0),
+            hover: Vec::with_capacity(0),
+            scroll: Vec::with_capacity(0),
+            file_drop: Vec::with_capacity(0),
+            text_input: Vec::with_capacity(0),
+            key_press: Vec::with_capacity(0),
+        }
+    }
+
+    pub fn add(&mut self, listener: EventListener<Msg>) {
+        match listener.event {
+            ElemEventTypes::MouseMove => self.mouse_move.push(listener),
+            ElemEventTypes::Click => self.click.push(listener),
+            ElemEventTypes::Hover => self.hover.push(listener),
+            ElemEventTypes::Scroll => self.scroll.push(listener),
+            ElemEventTypes::FileDrop => self.file_drop.push(listener),
+            ElemEventTypes::TextInput => self.text_input.push(listener),
+            ElemEventTypes::KeyPress => self.key_press.push(listener),
+        }
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Clone)]
+pub struct EventListener<Msg: Clone> {
+    pub event: ElemEventTypes,
+    pub msg: Option<Msg>,
+    pub kind: ListenerTypes,
+}
+
+impl<Msg: Clone> EventListener<Msg> {
+    pub fn new(event: ElemEventTypes) -> Self {
+        Self {
+            event,
+            msg: None,
+            kind: ListenerTypes::Listen,
+        }
+    }
+
+    pub fn with_kind(mut self, kind: ListenerTypes) -> Self {
+        self.kind = kind;
+        self
+    }
+
+    pub fn with_msg(mut self, msg: Msg) -> Self {
+        self.msg = Some(msg);
+        self
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum FileDropOpts {
     Drop,
     Hover,
@@ -101,15 +177,17 @@ pub enum ElemEvents {
     KeyPress {
         press: bool,
         key: Key,
-    }
+    },
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum ListenerTypes {
     Listen,
     Peek,
     Force,
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum ElemEventTypes {
     MouseMove,
     Click,
@@ -120,6 +198,7 @@ pub enum ElemEventTypes {
     KeyPress,
 }
 
+#[derive(Debug, Copy, Clone)]
 pub enum EnvEventStates {
     Free,
     Consumed,
@@ -132,7 +211,19 @@ pub enum SelectionStates {
     Leave,
 }
 
-
+impl From<EnvEvents> for EnvEventCategories {
+    fn from(value: EnvEvents) -> Self {
+        match value {
+            EnvEvents::MouseButton { .. } => EnvEventCategories::Positioned,
+            EnvEvents::FileDrop { .. } => EnvEventCategories::Positioned,
+            EnvEvents::Scroll { .. } => EnvEventCategories::Positioned,
+            EnvEvents::CursorMove { .. } => EnvEventCategories::DoublePosition,
+            EnvEvents::Select { .. } => EnvEventCategories::Once,
+            EnvEvents::Input { .. } => EnvEventCategories::Once,
+            EnvEvents::KeyPress { .. } => EnvEventCategories::Global,
+        }
+    }
+}
 
 /// Keys taken from [winit](https://github.com/rust-windowing/winit) version 0.30.5
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

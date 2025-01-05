@@ -7,8 +7,8 @@ use common::{
 };
 use rugui2::{
     colors::Colors,
-    element::{Element, ElementKey, EventListener},
-    events::{ElemEvents, SelectionStates},
+    element::{Element, ElementKey},
+    events::{ElemEvents, EventListener, SelectionStates},
     styles::{Container, Gradient, Image, Portion, Position, Rotation, Round, Value, Values},
     Gui,
 };
@@ -131,7 +131,7 @@ impl ApplicationHandler for App {
                 ),
             }));
 
-            child.events.push(EventListener {
+            child.events.add(EventListener {
                 event: rugui2::events::ElemEventTypes::Click,
                 kind: rugui2::events::ListenerTypes::Listen,
                 msg: None,

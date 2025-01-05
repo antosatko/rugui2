@@ -10,7 +10,6 @@ license = "MIT"
 
 
 [dependencies]
-bytemuck = { version = "1.20.0", features = ["derive"], optional = true }
 
 [dev-dependencies]
 tokio = { version = "1.42.0", features = ["full"] }
@@ -20,7 +19,6 @@ common = { path = "examples/common" }
 
 [features]
 default = []
-bytemuck = ["dep:bytemuck"]
 
 
 [workspace]

@@ -4,7 +4,6 @@ use crate::element::Container;
 
 
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
-#[cfg_attr(feature = "bytemuck", derive(bytemuck::Zeroable, bytemuck::Pod))]
 #[repr(C)]
 pub struct Vector(pub f32, pub f32);
 
@@ -56,6 +55,16 @@ impl Vector {
         let rot = self.rotate_around_point(&c.pos, -c.rotation);
 
         rot.rectangle_colision(&c.pos, &c.size).then(|| rot - c.pos)
+    }
+
+    pub fn container_colision_with_pos(&self, c: &Container) -> (bool, Vector) {
+        if c.rotation == 0.0 {
+            return (self.rectangle_colision(&c.pos, &c.size), *self - c.pos)
+        }
+
+        let rot = self.rotate_around_point(&c.pos, -c.rotation);
+
+        (rot.rectangle_colision(&c.pos, &c.size), rot - c.pos)
     }
 
     pub fn rectangle_colision(&self, pos: &Self, size: &Self) -> bool {

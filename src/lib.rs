@@ -299,46 +299,11 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         // --- TRANSFORM-INDEPENDENT ---
 
         let last = element.instance.container.clone();
-        element
-            .instance
-            .container
-            .clone_from(element_container_c);
+        element.instance.container.clone_from(element_container_c);
 
         // --- EVENTS ---
         if transform_update {
-            /*let over_last = self.cursor.last.container_colision(&last);
-            let over_current = self
-                .cursor
-                .current
-                .container_colision(element_container_c);*/
-
-            /*match (over_last, over_current) {
-                (Some(last), None) => {
-                    self.events.push(ElemEvent {
-                        kind: ElemEvents::CursorLeave { prev_pos: last },
-                        element_key: key,
-                        msg: None,
-                    });
-                }
-                (None, Some(current)) => {
-                    self.events.push(ElemEvent {
-                        kind: ElemEvents::CursorEnter { pos: current },
-                        element_key: key,
-                        msg: None,
-                    });
-                }
-                (Some(last), Some(current)) => {
-                    self.events.push(ElemEvent {
-                        kind: ElemEvents::CursorMove {
-                            pos: current,
-                            prev_pos: last,
-                        },
-                        element_key: key,
-                        msg: None,
-                    });
-                }
-                _ => (),
-            }*/
+            let _ = last;
         }
         // --- EVENTS ---
 
@@ -513,43 +478,51 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         state
     }
 
-    pub fn elem_env_event(
+    fn elem_env_event(
         &mut self,
         key: ElementKey,
         event: &EnvEvents,
         state: &mut EnvEventStates,
-    ) {
-        let elem = &self.elements[key.0 as usize];
+    ) -> EventCache {
+        let mut cache = EventCache::new();
+        let elem = &mut self.elements[key.0 as usize];
 
-        if let Some(children) = elem.children.clone() {
-            for key in children {
-                self.elem_env_event(key, event, state);
+        if let Some(children) = elem.children.take() {
+            for key in children.iter().rev() {
+                cache.merge(&self.elem_env_event(*key, event, state));
             }
+            let elem = &mut self.elements[key.0 as usize];
+            elem.children = Some(children);
         }
 
         let elem = &self.elements[key.0 as usize];
 
-        for listener in &elem.events {
-            match (&listener.kind, &state) {
-                (ListenerTypes::Force, _) => (),
-                (ListenerTypes::Listen, EnvEventStates::Free) => (),
-                (ListenerTypes::Peek, EnvEventStates::Free) => (),
-                _ => continue,
-            }
-            match (&listener.event, &event) {
-                (ElemEventTypes::MouseMove, EnvEvents::CursorMove { .. }) => {
-                    if let Some(pos) = self
-                        .cursor
-                        .current
-                        .container_colision(&elem.instance.container)
-                    {
+        macro_rules! listener_fit {
+            ($listener: expr) => {
+                match (&$listener.kind, &state) {
+                    (ListenerTypes::Force, _) => (),
+                    (ListenerTypes::Listen, EnvEventStates::Free) => (),
+                    (ListenerTypes::Peek, EnvEventStates::Free) => (),
+                    _ => continue,
+                }
+            };
+        }
+
+        match event {
+            EnvEvents::MouseButton { button, press } => {
+                let (col, pos) = self
+                    .cursor
+                    .current
+                    .container_colision_with_pos(&elem.instance.container);
+                cache.current_over |= col;
+                if cache.current_over {
+                    for listener in &elem.events.click {
+                        listener_fit!(listener);
                         self.events.push(ElemEvent {
-                            kind: ElemEvents::CursorMove {
+                            kind: ElemEvents::Click {
+                                button: *button,
+                                press: *press,
                                 pos,
-                                prev_pos: pos.relative_pos(
-                                    &elem.instance.container.pos,
-                                    elem.instance.container.rotation,
-                                ),
                             },
                             element_key: key,
                             msg: listener.msg.clone(),
@@ -557,17 +530,79 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                         Self::fix_event_state(state, &listener.kind);
                     }
                 }
-                (ElemEventTypes::Hover, EnvEvents::CursorMove { .. }) => {
-                    let current = self
-                        .cursor
-                        .current
-                        .container_colision(&elem.instance.container);
-                    let last = self
-                        .cursor
-                        .last
-                        .container_colision(&elem.instance.container);
-                    match (current, last) {
-                        (Some(pos), None) => {
+            }
+            EnvEvents::Scroll { delta } => {
+                let (col, pos) = self
+                    .cursor
+                    .current
+                    .container_colision_with_pos(&elem.instance.container);
+                cache.current_over |= col;
+                if cache.current_over {
+                    for listener in &elem.events.scroll {
+                        listener_fit!(listener);
+                        self.events.push(ElemEvent {
+                            kind: ElemEvents::Scroll { delta: *delta, pos },
+                            element_key: key,
+                            msg: listener.msg.clone(),
+                        });
+                        Self::fix_event_state(state, &listener.kind);
+                    }
+                }
+            }
+            EnvEvents::FileDrop { path, opt } => {
+                if *opt != FileDropOpts::Drop {
+                    return cache;
+                }
+                let (col, pos) = self
+                    .cursor
+                    .current
+                    .container_colision_with_pos(&elem.instance.container);
+                cache.current_over |= col;
+                let path = match path {
+                    Some(path) => path,
+                    None => return cache,
+                };
+                if cache.current_over {
+                    for listener in &elem.events.scroll {
+                        listener_fit!(listener);
+                        self.events.push(ElemEvent {
+                            kind: ElemEvents::FileDrop {
+                                path: path.clone(),
+                                pos,
+                            },
+                            element_key: key,
+                            msg: listener.msg.clone(),
+                        });
+                        Self::fix_event_state(state, &listener.kind);
+                    }
+                }
+            }
+            EnvEvents::CursorMove { pos: _ } => {
+                let (col, pos) = self
+                    .cursor
+                    .current
+                    .container_colision_with_pos(&elem.instance.container);
+                cache.current_over |= col;
+                let (col, prev_pos) = self
+                    .cursor
+                    .last
+                    .container_colision_with_pos(&elem.instance.container);
+                cache.last_over |= col;
+                match (cache.current_over, cache.last_over) {
+                    (true, true) => {
+                        for listener in &elem.events.mouse_move {
+                            listener_fit!(listener);
+                            self.events.push(ElemEvent {
+                                kind: ElemEvents::CursorMove { pos, prev_pos },
+                                element_key: key,
+                                msg: listener.msg.clone(),
+                            });
+                            Self::fix_event_state(state, &listener.kind);
+                        }
+                    }
+                    (true, false) => {
+                        for listener in &elem.events.hover {
+                            listener_fit!(listener);
                             self.events.push(ElemEvent {
                                 kind: ElemEvents::CursorEnter { pos },
                                 element_key: key,
@@ -575,7 +610,10 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                             });
                             Self::fix_event_state(state, &listener.kind);
                         }
-                        (None, Some(prev_pos)) => {
+                    }
+                    (false, true) => {
+                        for listener in &elem.events.hover {
+                            listener_fit!(listener);
                             self.events.push(ElemEvent {
                                 kind: ElemEvents::CursorLeave { prev_pos },
                                 element_key: key,
@@ -583,83 +621,27 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                             });
                             Self::fix_event_state(state, &listener.kind);
                         }
-                        _ => {}
                     }
+                    _ => (),
                 }
-                (ElemEventTypes::Click, EnvEvents::MouseButton { button, press }) => {
-                    if let Some(pos) = self
-                        .cursor
-                        .current
-                        .container_colision(&elem.instance.container)
-                    {
-                        let (button, press) = (*button, *press);
-                        self.events.push(ElemEvent {
-                            kind: ElemEvents::Click { button, press, pos },
-                            element_key: key,
-                            msg: listener.msg.clone(),
-                        });
-                        Self::fix_event_state(state, &listener.kind);
-                    }
-                }
-                (ElemEventTypes::FileDrop, EnvEvents::FileDrop { path, opt }) => {
-                    match opt {
-                        FileDropOpts::Cancel => continue,
-                        FileDropOpts::Hover => continue,
-                        _ => (),
-                    }
-                    if let Some(pos) = self
-                        .cursor
-                        .current
-                        .container_colision(&elem.instance.container)
-                    {
-                        let path = if let Some(path) = path {
-                            path.clone()
-                        } else {
-                            continue;
-                        };
-                        self.events.push(ElemEvent {
-                            kind: ElemEvents::FileDrop { path, pos },
-                            element_key: key,
-                            msg: listener.msg.clone(),
-                        });
-                        Self::fix_event_state(state, &listener.kind);
-                    }
-                }
-                (ElemEventTypes::Scroll, EnvEvents::Scroll { delta }) => {
-                    if let Some(pos) = self
-                        .cursor
-                        .current
-                        .container_colision(&elem.instance.container)
-                    {
-                        let delta = *delta;
-                        self.events.push(ElemEvent {
-                            kind: ElemEvents::Scroll { delta, pos },
-                            element_key: key,
-                            msg: listener.msg.clone(),
-                        });
-                        Self::fix_event_state(state, &listener.kind);
-                    }
-                }
-                (
-                    ElemEventTypes::KeyPress,
-                    EnvEvents::KeyPress {
-                        key: keyboard_key,
-                        press,
-                    },
-                ) => {
-                    let (keyboard_key, press) = (*keyboard_key, *press);
+            }
+            EnvEvents::KeyPress { key: key_key, press } => {
+                for listener in &elem.events.key_press {
                     self.events.push(ElemEvent {
                         kind: ElemEvents::KeyPress {
-                            press,
-                            key: keyboard_key,
+                            press: *press,
+                            key: *key_key,
                         },
                         element_key: key,
                         msg: listener.msg.clone(),
                     });
                 }
-                _ => continue,
             }
+            EnvEvents::Select { .. } => (),
+            EnvEvents::Input { .. } => (),
         }
+
+        cache
     }
 
     fn fix_event_state(state: &mut EnvEventStates, listener: &ListenerTypes) {
@@ -837,6 +819,26 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
 
     pub fn size(&self) -> (u32, u32) {
         self.size
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct EventCache {
+    current_over: bool,
+    last_over: bool,
+}
+
+impl EventCache {
+    pub fn new() -> Self {
+        Self {
+            current_over: false,
+            last_over: false,
+        }
+    }
+
+    pub fn merge(&mut self, other: &Self) {
+        self.current_over |= other.current_over;
+        self.last_over |= other.last_over;
     }
 }
 

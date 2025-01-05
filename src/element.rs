@@ -1,10 +1,10 @@
 use std::fmt::Debug;
 
-use crate::{ElemEventTypes, ImageData, ListenerTypes, Styles, Value, Vector};
+use crate::{EventListeners, ImageData, Styles, Value, Vector};
 
 pub struct Element<Msg: Clone, Img: Clone + ImageData> {
     pub label: Option<String>,
-    pub events: Vec<EventListener<Msg>>,
+    pub events: EventListeners<Msg>,
     pub children: Option<Vec<ElementKey>>,
     pub(crate) instance: ElementInstance,
     pub(crate) styles: Styles<Img>,
@@ -23,9 +23,7 @@ impl ElementKey {
     }
 }
 
-#[cfg_attr(feature = "bytemuck", derive(bytemuck::Zeroable, bytemuck::Pod))]
 #[derive(Debug, Copy, Clone, PartialEq)]
-#[repr(C)]
 pub struct ElementInstance {
     pub container: Container,
     pub color: [f32; 4],
@@ -86,7 +84,6 @@ impl Flags {
     }
 }
 
-#[cfg_attr(feature = "bytemuck", derive(bytemuck::Zeroable, bytemuck::Pod))]
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
 #[repr(C)]
 pub struct Container {
@@ -122,7 +119,7 @@ impl<Msg: Clone, Img: Clone + ImageData> Default for Element<Msg, Img> {
     fn default() -> Self {
         Self {
             label: None,
-            events: Vec::new(),
+            events: EventListeners::new(),
             children: None,
             instance: ElementInstance::default(),
             styles: Styles::default(),
@@ -260,27 +257,5 @@ impl ElementInstance {
 
     pub fn remove_flag(&mut self, flag: Flags) {
         self.flags &= !u32::from(flag);
-    }
-}
-
-pub struct EventListener<Msg: Clone = ()> {
-    pub event: ElemEventTypes,
-    pub msg: Option<Msg>,
-    pub kind: ListenerTypes,
-}
-
-impl <Msg: Clone> EventListener<Msg> {
-    pub fn new(event: ElemEventTypes) -> Self {
-        Self { event, msg: None, kind: ListenerTypes::Listen }
-    }
-
-    pub fn with_kind(mut self, kind: ListenerTypes) -> Self {
-        self.kind = kind;
-        self
-    }
-    
-    pub fn with_msg(mut self, msg: Msg) -> Self {
-        self.msg = Some(msg);
-        self
     }
 }

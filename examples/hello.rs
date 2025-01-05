@@ -7,8 +7,8 @@ use common::{
 };
 use rugui2::{
     colors::Colors,
-    element::{Element, ElementKey, EventListener},
-    events::ElemEventTypes,
+    element::{Element, ElementKey},
+    events::{ElemEventTypes, EventListener},
     styles::{Container, Gradient, Overflow, Portion, Position, Rotation, Round, Value, Values},
     Gui,
 };
@@ -83,7 +83,7 @@ impl ApplicationHandler for App {
         }));
         elem.styles_mut().scroll_y.set(Value::Px(0.0));
         elem.styles_mut().overflow.set(Overflow::Hidden);
-        elem.events.push(EventListener {
+        elem.events.add(EventListener {
             event: rugui2::events::ElemEventTypes::Scroll,
             msg: None,
             kind: rugui2::events::ListenerTypes::Listen,
@@ -127,7 +127,7 @@ impl ApplicationHandler for App {
         }));
         elem2
             .events
-            .push(EventListener::new(ElemEventTypes::MouseMove));
+            .add(EventListener::new(ElemEventTypes::MouseMove));
         let element_key2 = gui.add_element(elem2);
 
         elem.children = Some(vec![element_key2]);

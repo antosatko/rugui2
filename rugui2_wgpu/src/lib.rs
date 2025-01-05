@@ -38,7 +38,7 @@ impl Rugui2WGPU {
         };
 
     pub const VERTEX_BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
-        array_stride: size_of::<ElementInstance>() as u64,
+        array_stride: size_of::<WGPUElementInstance>() as u64,
         attributes: &[
             // center
             VertexAttribute {
@@ -124,12 +124,6 @@ impl Rugui2WGPU {
                 shader_location: 13,
                 offset: 148,
             },
-            // image_size
-            VertexAttribute {
-                format: wgpu::VertexFormat::Float32x2,
-                shader_location: 14,
-                offset: 164,
-            },
         ],
         step_mode: wgpu::VertexStepMode::Instance,
     };
@@ -172,7 +166,7 @@ impl Rugui2WGPU {
 
         let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Rugui2 Instance Buffer"),
-            size: (size_of::<ElementInstance>() * 1024) as u64,
+            size: (size_of::<WGPUElementInstance>() * 1024) as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -387,8 +381,8 @@ impl Rugui2WGPU {
             &mut |e, k, _depth| {
                 queue.write_buffer(
                     &self.instance_buffer,
-                    k.raw() * size_of::<ElementInstance>() as u64,
-                    bytemuck::cast_slice(&[*e.instance()]),
+                    k.raw() * size_of::<WGPUElementInstance>() as u64,
+                    bytemuck::cast_slice(&[WGPUElementInstance::from_instance(*e.instance())]),
                 );
             },
             None,
@@ -454,6 +448,80 @@ impl Rugui2WGPU {
             pass.draw(0..6, i..i + 1);
 
             pass.set_pipeline(&self.pipeline);
+        }
+    }
+}
+
+#[derive(bytemuck::Zeroable, bytemuck::NoUninit)]
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+struct WGPUElementInstance {
+    pub pos: [f32; 2],
+    pub size: [f32; 2],
+    pub rotation: f32,
+    pub color: [f32; 4],
+    pub flags: u32,
+    pub round: [f32; 2],
+    pub alpha: f32,
+    /// x, y
+    pub lin_grad_p1: [f32; 2],
+    /// x, y
+    pub lin_grad_p2: [f32; 2],
+    pub lin_grad_color1: [f32; 4],
+    pub lin_grad_color2: [f32; 4],
+    /// x, y
+    pub rad_grad_p1: [f32; 2],
+    /// x, y
+    pub rad_grad_p2: [f32; 2],
+    pub rad_grad_color1: [f32; 4],
+    pub rad_grad_color2: [f32; 4],
+    pub image_tint: [f32; 4],
+}
+
+impl WGPUElementInstance {
+    fn from_instance(value: ElementInstance) -> Self {
+        value.into()
+    }
+}
+
+
+impl From<ElementInstance> for WGPUElementInstance {
+    fn from(value: ElementInstance) -> Self {
+        let ElementInstance {
+            container,
+            color,
+            flags,
+            round,
+            alpha,
+            lin_grad_p1,
+            lin_grad_p2,
+            lin_grad_color1,
+            lin_grad_color2,
+            rad_grad_p1,
+            rad_grad_p2,
+            rad_grad_color1,
+            rad_grad_color2,
+            image_tint,
+            image_size: _,
+            scroll: _,
+        } = value;
+        Self {
+            pos: container.pos.into(),
+            size: container.size.into(),
+            rotation: container.rotation.into(),
+            color,
+            flags,
+            round,
+            alpha,
+            lin_grad_p1: lin_grad_p1.into(),
+            lin_grad_p2: lin_grad_p2.into(),
+            lin_grad_color1,
+            lin_grad_color2,
+            rad_grad_p1: rad_grad_p1.into(),
+            rad_grad_p2: rad_grad_p2.into(),
+            rad_grad_color1,
+            rad_grad_color2,
+            image_tint,
         }
     }
 }

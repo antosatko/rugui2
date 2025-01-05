@@ -8,7 +8,7 @@ wgpu = {version = "23.0.1"}
 image = { version = "0.25.5", optional = true }
 bytemuck = { version = "1.20.0", features = ["derive"] }
 
-rugui2 = {path = "../", features = ["bytemuck"] }
+rugui2 = {path = "../" }
 
 [features]
 default = ["image"]

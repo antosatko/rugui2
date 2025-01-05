@@ -7,8 +7,8 @@ use common::{
 };
 use rugui2::{
     colors::Colors,
-    element::{Element, ElementKey, EventListener},
-    events::{ElemEventTypes, ElemEvents, MouseButtons},
+    element::{Element, ElementKey},
+    events::{ElemEventTypes, ElemEvents, EventListener, MouseButtons},
     styles::{Container, Gradient, Portion, Position, Round, Value, Values},
     variables::Variable,
     Gui,
@@ -108,7 +108,7 @@ impl ApplicationHandler for App {
         ));
         container
             .events
-            .push(EventListener::new(ElemEventTypes::Scroll));
+            .add(EventListener::new(ElemEventTypes::Scroll));
         container.procedures.push(Value::SetVariable(
             width_var,
             Box::new(WIDTH.unwrap_or_else(|| {
@@ -137,10 +137,10 @@ impl ApplicationHandler for App {
                 element.allow_select = true;
                 element
                     .events
-                    .push(EventListener::new(ElemEventTypes::Hover));
+                    .add(EventListener::new(ElemEventTypes::Hover));
                 element
                     .events
-                    .push(EventListener::new(ElemEventTypes::Click));
+                    .add(EventListener::new(ElemEventTypes::Click));
 
                 let styles = element.styles_mut();
                 styles.position.set(Position {
@@ -268,7 +268,7 @@ impl ApplicationHandler for App {
                 this.t += 1;
                 this.renderer
                     .prepare(&mut this.gui, &this.drawing.queue, &this.drawing.device);
-                // println!("prepare took: {:?}", start.elapsed());
+                println!("prepare took: {:?}", start.elapsed());
                 this.drawing.draw(&mut this.gui, &mut this.renderer);
                 this.window.request_redraw();
             }

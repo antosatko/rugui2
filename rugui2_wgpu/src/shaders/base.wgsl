@@ -20,7 +20,6 @@ struct VertexInput {
     @location(11) rad_grad_p1_color: vec4<f32>,
     @location(12) rad_grad_p2_color: vec4<f32>,
     @location(13) texture_tint: vec4<f32>,
-    @location(14) _texture_size: vec2<f32>, // left here for reasosns
 }
 
 struct VertexOutput {
