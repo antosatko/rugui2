@@ -13,6 +13,7 @@ pub mod events;
 pub mod math;
 pub mod styles;
 pub mod variables;
+pub mod widgets;
 
 pub struct Gui<Msg: Clone = (), Img: Clone + ImageData = ()> {
     elements: Vec<Element<Msg, Img>>,
@@ -487,6 +488,43 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         let mut cache = EventCache::new();
         let elem = &mut self.elements[key.0 as usize];
 
+        if *elem.styles.overflow.get() == Overflow::Hidden {
+            match &event {
+                EnvEvents::MouseButton { .. } => {
+                    if self
+                        .cursor
+                        .current
+                        .container_colision(&elem.instance.container).is_none()
+                    {
+                        return cache;
+                    }
+                }
+                EnvEvents::CursorMove { .. } => {
+                    if self
+                        .cursor
+                        .current
+                        .container_colision(&elem.instance.container).is_none()
+                        && self
+                        .cursor
+                        .last
+                        .container_colision(&elem.instance.container).is_none()
+                    {
+                        return cache;
+                    }
+                }
+                EnvEvents::Scroll { .. } => {
+                    if self
+                        .cursor
+                        .current
+                        .container_colision(&elem.instance.container).is_none()
+                    {
+                        return cache;
+                    }
+                }
+                _ => ()
+            }
+        }
+
         if let Some(children) = elem.children.take() {
             for key in children.iter().rev() {
                 cache.merge(&self.elem_env_event(*key, event, state));
@@ -623,7 +661,10 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                     _ => (),
                 }
             }
-            EnvEvents::KeyPress { key: key_key, press } => {
+            EnvEvents::KeyPress {
+                key: key_key,
+                press,
+            } => {
                 for listener in &elem.events.key_press {
                     self.events.push(ElemEvent {
                         kind: ElemEvents::KeyPress {
@@ -817,6 +858,10 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
 
     pub fn size(&self) -> (u32, u32) {
         self.size
+    }
+
+    pub fn elements(&self) -> usize {
+        self.elements.len()
     }
 }
 

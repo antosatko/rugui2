@@ -85,7 +85,7 @@ pub enum Style {
     Margin,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Overflow {
     Shown,
     Hidden,

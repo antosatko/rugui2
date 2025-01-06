@@ -20,6 +20,9 @@ common = { path = "examples/common" }
 [features]
 default = []
 
+[profile.release]
+debug = true
+
 
 [workspace]
 members = ["examples/common", "rugui2_wgpu", "rugui2_winit"]

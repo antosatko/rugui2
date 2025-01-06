@@ -86,7 +86,7 @@ impl ApplicationHandler for App {
             Portion::Full,
         ));
 
-        const CHILDREN: f32 = 0.0;
+        const CHILDREN: f32 = 5.0;
         let mut children = Vec::new();
         let mut text_fields = HashMap::new();
         for i in 0..CHILDREN as u32 {

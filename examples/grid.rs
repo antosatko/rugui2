@@ -7,10 +7,9 @@ use common::{
 };
 use rugui2::{
     colors::Colors,
-    element::{Element, ElementKey},
     events::{ElemEventTypes, ElemEvents, EventListener, MouseButtons},
     styles::{Container, Gradient, Portion, Position, Round, Value, Values},
-    variables::Variable,
+    widgets::{GridBuilder, RowsBuilder, ScrollBounds, WidgetControlFlow},
     Gui,
 };
 use tokio::runtime::Runtime;
@@ -33,14 +32,18 @@ pub enum App {
 
 pub struct Program {
     pub window: Arc<Window>,
-    pub gui: Gui<(), Texture>,
+    pub gui: Gui<Msgs, Texture>,
     pub rt: Runtime,
-    pub element_key: ElementKey,
     pub drawing: Drawing,
     pub renderer: Rugui2WGPU,
     pub t: u64,
     pub frame_start: Instant,
     pub program_start: Instant,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Msgs {
+    ScrollBounds(ScrollBounds),
 }
 
 impl ApplicationHandler for App {
@@ -60,136 +63,86 @@ impl ApplicationHandler for App {
         ));
         gui.selection.menu_accessibility = true;
 
-        const ROWS: u32 = 3;
-        const COLUMNS: u32 = 5;
-        const WIDTH: Option<Value> = None;
-        const HEIGHT: Option<Value> = None;
+        let container_builder = GridBuilder::new(5, 3)
+            .set_scrollable(true)
+            .set_count(5 * 50);
+        let scroll_bounds = container_builder.gen_scroll_bounds();
 
-        let width_var = gui.variables.new(Variable::new_var());
-        let height_var = gui.variables.new(Variable::new_var());
+        let mut inner_builder = RowsBuilder::new(3).set_count(10).set_scrollable(true);
+        let inner_scroll = inner_builder.gen_scroll_bounds();
+        inner_builder = inner_builder.set_scroll_msg(Msgs::ScrollBounds(inner_scroll));
 
-        let mut container = Element::default();
-        container
-            .styles_mut()
-            .overflow
-            .set(rugui2::styles::Overflow::Hidden);
-        container.styles_mut().scroll_y.set(Value::Value(
-            Container::This,
-            Values::Height,
-            Portion::Mul(0.0),
-        ));
-        container.styles_mut().scroll_y.set_dynamic(true);
-        container.styles_mut().grad_linear.set(Some(Gradient {
-            p1: (
-                Position {
-                    container: Container::This,
-                    height: Value::Zero,
-                    width: Value::Zero,
+        let container = container_builder
+            .set_scroll_msg(Msgs::ScrollBounds(scroll_bounds))
+            .build(
+                |container, _| {
+                    container
+                        .events
+                        .add(EventListener::new(ElemEventTypes::MouseMove));
+                    container.styles_mut().round.set(Some(Round {
+                        size: Value::Px(50.0),
+                        anti_aliasing: Value::Px(0.0),
+                    }));
+                    container.styles_mut().padding.set(Value::Value(
+                        Container::Container,
+                        Values::Min,
+                        Portion::Mul(0.1),
+                    ));
                 },
-                Colors::RED.with_alpha(0.5),
-            ),
-            p2: (
-                Position {
-                    container: Container::This,
-                    height: Value::Value(Container::This, Values::Height, Portion::Full),
-                    width: Value::Zero,
+                |(x, y), element, gui| {
+                    if (x + y) % 6 == 0 {
+                        //return WidgetControlFlow::Discard;
+                    }
+                    element.allow_select = true;
+                    element
+                        .events
+                        .add(EventListener::new(ElemEventTypes::Hover));
+                    element
+                        .events
+                        .add(EventListener::new(ElemEventTypes::Click));
+
+                    let styles = element.styles_mut();
+
+                    styles.color.set(Colors::RED);
+                    styles.padding.set(Value::Value(
+                        // it works now even without this yaaay
+                        Container::This,
+                        Values::Min,
+                        Portion::Mul(0.01),
+                    ));
+
+                    let rows = inner_builder.build(
+                        |e, _| {
+                            e.styles_mut().padding.set(Value::Px(50.0));
+                        },
+                        |row, element, _| {
+                            let styles = element.styles_mut();
+
+                            styles.padding.set(Value::Px(1.0));
+                            styles.color.set(Colors::FRgba(
+                                row as f32 * 0.1,
+                                row as f32 * 0.1,
+                                row as f32 * 0.1,
+                                1.0,
+                            ));
+
+                            WidgetControlFlow::Done
+                        },
+                        gui,
+                    );
+                    element.children = Some(vec![rows]);
+
+                    WidgetControlFlow::Done
                 },
-                Colors::BLACK,
-            ),
-        }));
-        container.styles_mut().round.set(Some(Round {
-            size: Value::Px(50.0),
-            anti_aliasing: Value::Px(0.0),
-        }));
-        container.styles_mut().padding.set(Value::Value(
-            Container::Container,
-            Values::Min,
-            Portion::Mul(0.1),
-        ));
-        container
-            .events
-            .add(EventListener::new(ElemEventTypes::Scroll));
-        container.procedures.push(Value::SetVariable(
-            width_var,
-            Box::new(WIDTH.unwrap_or_else(|| {
-                Value::Value(
-                    Container::This,
-                    Values::Width,
-                    Portion::Mul(1.0 / COLUMNS as f32),
-                )
-            })),
-        ));
-        container.procedures.push(Value::SetVariable(
-            height_var,
-            Box::new(HEIGHT.unwrap_or_else(|| {
-                Value::Value(
-                    Container::This,
-                    Values::Height,
-                    Portion::Mul(1.0 / ROWS as f32),
-                )
-            })),
-        ));
-        let mut children = Vec::new();
-        for row in 0..ROWS + 5 {
-            for column in 0..COLUMNS {
-                let mut element = Element::default();
+                &mut gui,
+            );
 
-                element.allow_select = true;
-                element
-                    .events
-                    .add(EventListener::new(ElemEventTypes::Hover));
-                element
-                    .events
-                    .add(EventListener::new(ElemEventTypes::Click));
-
-                let styles = element.styles_mut();
-                styles.position.set(Position {
-                    container: Container::Container,
-                    height: Value::Add(Box::new((
-                        Value::Value(
-                            Container::Container,
-                            Values::Height,
-                            Portion::Mul(row as f32 / ROWS as f32),
-                        ),
-                        Value::Mul(Box::new((Value::Variable(height_var), Value::Px(0.5)))),
-                    ))),
-                    width: Value::Add(Box::new((
-                        Value::Value(
-                            Container::Container,
-                            Values::Width,
-                            Portion::Mul(column as f32 / COLUMNS as f32),
-                        ),
-                        Value::Mul(Box::new((Value::Variable(width_var), Value::Px(0.5)))),
-                    ))),
-                });
-
-                styles.width.set(Value::Variable(width_var));
-                styles.height.set(Value::Variable(height_var));
-
-                styles.color.set(Colors::RED);
-                /*styles.padding.set(Value::Value( // it works now even without this yaaay
-                    Container::This,
-                    Values::Min,
-                    Portion::Mul(0.1),
-                ));*/
-                styles.round.set(Some(Round {
-                    size: Value::Px(50.0),
-                    anti_aliasing: Value::Px(0.0),
-                }));
-
-                children.push(gui.add_element(element));
-            }
-        }
-        container.children = Some(children);
-
-        let element_key = gui.add_element(container);
-        gui.set_entry(element_key);
+        gui.set_entry(container);
 
         let program = Program {
             window,
             gui,
             rt,
-            element_key,
             drawing,
             renderer,
             t: 0,
@@ -237,19 +190,57 @@ impl ApplicationHandler for App {
                     rugui2::events::SelectionStates::Confirm => {
                         element.styles_mut().color.set(Colors::GREEN)
                     }
-                    rugui2::events::SelectionStates::Enter => {
-                        element.styles_mut().color.set(Colors::YELLOW)
-                    }
+                    rugui2::events::SelectionStates::Enter => element
+                        .styles_mut()
+                        .color
+                        .set(Colors::FRgba(0.6, 0.0, 0.0, 1.0)),
                     rugui2::events::SelectionStates::Leave => {
                         element.styles_mut().color.set(Colors::RED)
                     }
                 },
-                ElemEvents::Scroll { delta, .. } => match element.styles_mut().scroll_y.get_mut() {
-                    Value::Value(_, _, Portion::Mul(px)) => {
-                        *px = (*px + delta.1 * 0.1).min(0.0).max(-5.0 / 3.0)
+                ElemEvents::Scroll { delta, .. } => match e.msg {
+                    Some(Msgs::ScrollBounds(bounds)) => {
+                        bounds.scroll(element, delta.1 * 0.1);
                     }
-                    _ => (),
+                    None => (),
                 },
+                ElemEvents::CursorMove { pos, .. } => {
+                    let pos = pos / element.instance().container.size + 0.5;
+                    element.styles_mut().grad_radial.set(Some(Gradient {
+                        p1: (
+                            Position {
+                                container: Container::This,
+                                height: Value::Value(
+                                    Container::This,
+                                    Values::Height,
+                                    Portion::Mul(pos.1),
+                                ),
+                                width: Value::Value(
+                                    Container::This,
+                                    Values::Width,
+                                    Portion::Mul(pos.0),
+                                ),
+                            },
+                            Colors::YELLOW,
+                        ),
+                        p2: (
+                            Position {
+                                container: Container::This,
+                                height: Value::Value(
+                                    Container::This,
+                                    Values::Height,
+                                    Portion::Mul(pos.1 + 0.2),
+                                ),
+                                width: Value::Value(
+                                    Container::This,
+                                    Values::Width,
+                                    Portion::Mul(pos.0 + 0.2),
+                                ),
+                            },
+                            Colors::TRANSPARENT,
+                        ),
+                    }));
+                }
                 _ => (),
             }
         }
