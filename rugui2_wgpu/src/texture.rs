@@ -5,6 +5,8 @@ use std::sync::Arc;
 use image::{DynamicImage, GenericImageView};
 use rugui2::styles::ImageData;
 
+use crate::{GLYPH_ATLAS_DEPTH, GLYPH_ATLAS_SIDE};
+
 #[derive(Debug, Clone)]
 pub struct Texture {
     pub texture: Arc<wgpu::Texture>,
@@ -80,82 +82,210 @@ impl Texture {
                 },
             ],
         };
+        pub const GLYPH_BIND_GROUP_LAYOUT: wgpu::BindGroupLayoutDescriptor<'static> =
+            wgpu::BindGroupLayoutDescriptor {
+                label: Some("Texture"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D3,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            };
 
-    pub fn from_bytes(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        img: &[u8],
-        dimensions: (u32, u32),
-        label: Option<&str>,
-    ) -> Option<Self> {
-        if img.len() as u32 != dimensions.0 * dimensions.1 * 4 {
-            return None;
+        pub fn from_bytes(
+            device: &wgpu::Device,
+            queue: &wgpu::Queue,
+            img: &[u8],
+            dimensions: (u32, u32),
+            label: Option<&str>,
+        ) -> Option<Self> {
+            if img.len() as u32 != dimensions.0 * dimensions.1 * 4 {
+                return None;
+            }
+            let size = wgpu::Extent3d {
+                width: dimensions.0,
+                height: dimensions.1,
+                depth_or_array_layers: 1,
+            };
+            let texture = Arc::new(device.create_texture(&wgpu::TextureDescriptor {
+                label,
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            }));
+    
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    aspect: wgpu::TextureAspect::All,
+                    texture: &texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                },
+                img,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4 * dimensions.0),
+                    rows_per_image: None,
+                },
+                size,
+            );
+    
+            let view = Arc::new(texture.create_view(&wgpu::TextureViewDescriptor::default()));
+            let sampler = Arc::new(device.create_sampler(&wgpu::SamplerDescriptor {
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Nearest,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                ..Default::default()
+            }));
+    
+            let bind_group = Arc::new(device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &device.create_bind_group_layout(&Self::BIND_GROUP_LAYOUT),
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    },
+                ],
+                label: None,
+            }));
+    
+            Some(Self {
+                texture,
+                view,
+                sampler,
+                bind_group,
+            })
         }
-        let size = wgpu::Extent3d {
-            width: dimensions.0,
-            height: dimensions.1,
-            depth_or_array_layers: 1,
-        };
-        let texture = Arc::new(device.create_texture(&wgpu::TextureDescriptor {
-            label,
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        }));
 
-        queue.write_texture(
-            wgpu::ImageCopyTexture {
-                aspect: wgpu::TextureAspect::All,
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-            },
-            img,
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * dimensions.0),
-                rows_per_image: None,
-            },
-            size,
-        );
+        pub fn new(
+            device: &wgpu::Device,
+            dimensions: (u32, u32),
+            label: Option<&str>,
+        ) -> Option<Self> {
+            let size = wgpu::Extent3d {
+                width: dimensions.0,
+                height: dimensions.1,
+                depth_or_array_layers: 1,
+            };
+            let texture = Arc::new(device.create_texture(&wgpu::TextureDescriptor {
+                label,
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            }));
+    
+            let view = Arc::new(texture.create_view(&wgpu::TextureViewDescriptor::default()));
+            let sampler = Arc::new(device.create_sampler(&wgpu::SamplerDescriptor {
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Nearest,
+                min_filter: wgpu::FilterMode::Nearest,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                ..Default::default()
+            }));
+    
+            let bind_group = Arc::new(device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &device.create_bind_group_layout(&Self::BIND_GROUP_LAYOUT),
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    },
+                ],
+                label: None,
+            }));
+    
+            Some(Self {
+                texture,
+                view,
+                sampler,
+                bind_group,
+            })
+        }
 
-        let view = Arc::new(texture.create_view(&wgpu::TextureViewDescriptor::default()));
-        let sampler = Arc::new(device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
-            ..Default::default()
-        }));
-
-        let bind_group = Arc::new(device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &device.create_bind_group_layout(&Self::BIND_GROUP_LAYOUT),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-            label: None,
-        }));
-
-        Some(Self {
-            texture,
-            view,
-            sampler,
-            bind_group,
-        })
-    }
+        pub(crate) fn atlas(device: &wgpu::Device) -> Self {
+            let size = wgpu::Extent3d {
+                width: GLYPH_ATLAS_SIDE as u32,
+                height: GLYPH_ATLAS_SIDE as u32,
+                depth_or_array_layers: GLYPH_ATLAS_DEPTH as u32,
+            };
+            let texture = Arc::new(device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("Rugui2 glyph atlas"),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D3,
+                format: wgpu::TextureFormat::R8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            }));
+    
+            let view = Arc::new(texture.create_view(&wgpu::TextureViewDescriptor::default()));
+            let sampler = Arc::new(device.create_sampler(&wgpu::SamplerDescriptor {
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Nearest,
+                min_filter: wgpu::FilterMode::Nearest,
+                mipmap_filter: wgpu::FilterMode::Nearest,
+                ..Default::default()
+            }));
+    
+            let bind_group = Arc::new(device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &device.create_bind_group_layout(&Self::GLYPH_BIND_GROUP_LAYOUT),
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&sampler),
+                    },
+                ],
+                label: None,
+            }));
+    
+            Self {
+                texture,
+                view,
+                sampler,
+                bind_group,
+            }
+        }
 }
 
 #[cfg(feature = "image")]

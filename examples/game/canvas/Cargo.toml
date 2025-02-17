@@ -1,0 +1,11 @@
+[package]
+name = "canvas"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bytemuck = { version = "1.20.0", features = ["derive"] }
+wgpu = {version = "24.0.0", optional = true, features = ["wgsl"]}
+
+[features]
+wgpu = ["dep:wgpu"]

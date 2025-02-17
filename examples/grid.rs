@@ -8,8 +8,11 @@ use common::{
 use rugui2::{
     colors::Colors,
     events::{ElemEventTypes, ElemEvents, EventListener, MouseButtons},
-    styles::{Container, Gradient, Portion, Position, Round, Value, Values},
-    widgets::{GridBuilder, RowsBuilder, ScrollBounds, WidgetControlFlow},
+    styles::{Container, Gradient, Portion, Position, Value, Values},
+    widgets::{
+        ColumnsBuilder, GridBuilder, RowsBuilder, Scroll, ScrollBounds, WidgetControlFlow,
+        WidgetMsgs,
+    },
     Gui,
 };
 use tokio::runtime::Runtime;
@@ -41,8 +44,9 @@ pub struct Program {
     pub program_start: Instant,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Msgs {
+    Widgets(WidgetMsgs<Msgs, Texture, (), ()>),
     ScrollBounds(ScrollBounds),
 }
 
@@ -63,55 +67,57 @@ impl ApplicationHandler for App {
         ));
         gui.selection.menu_accessibility = true;
 
-        let container_builder = GridBuilder::new(5, 3)
-            .set_scrollable(true)
-            .set_count(5 * 50);
-        let scroll_bounds = container_builder.gen_scroll_bounds();
+        /*let container_builder = GridBuilder::new(5, 3)
+            .with_scroll(Scroll::from_multiplier(0.1))
+            .set_count(5 * 50)
+            .with_auto_events(Msgs::Widgets);
 
-        let mut inner_builder = RowsBuilder::new(3).set_count(10).set_scrollable(true);
-        let inner_scroll = inner_builder.gen_scroll_bounds();
-        inner_builder = inner_builder.set_scroll_msg(Msgs::ScrollBounds(inner_scroll));
+        let inner_rows_builder = RowsBuilder::new(3)
+            .set_count(10)
+            .with_scroll(Scroll::from_multiplier(0.1))
+            .with_auto_events(Msgs::Widgets);
 
-        let container = container_builder
-            .set_scroll_msg(Msgs::ScrollBounds(scroll_bounds))
-            .build(
-                |container, _| {
-                    container
-                        .events
-                        .add(EventListener::new(ElemEventTypes::MouseMove));
-                    container.styles_mut().round.set(Some(Round {
-                        size: Value::Px(50.0),
-                        anti_aliasing: Value::Px(0.0),
-                    }));
-                    container.styles_mut().padding.set(Value::Value(
-                        Container::Container,
-                        Values::Min,
-                        Portion::Mul(0.1),
-                    ));
-                },
-                |(x, y), element, gui| {
-                    if (x + y) % 6 == 0 {
-                        //return WidgetControlFlow::Discard;
-                    }
-                    element.allow_select = true;
-                    element
-                        .events
-                        .add(EventListener::new(ElemEventTypes::Hover));
-                    element
-                        .events
-                        .add(EventListener::new(ElemEventTypes::Click));
+        let inner_columns_builder = ColumnsBuilder::new(3)
+            .set_count(10)
+            .with_scroll(Scroll::from_multiplier(0.1))
+            .with_auto_events(Msgs::Widgets);
 
-                    let styles = element.styles_mut();
+        let container = container_builder.build(
+            |container, _| {
+                container
+                    .events
+                    .add(EventListener::new(ElemEventTypes::MouseMove));
+                container.styles_mut().round.set(Some(Value::Px(50.0)));
+                container.styles_mut().padding.set(Value::Value(
+                    Container::Container,
+                    Values::Min,
+                    Portion::Mul(0.1),
+                ));
+            },
+            |(x, y), element, gui| {
+                element.allow_select = true;
+                element
+                    .events
+                    .add(EventListener::new(ElemEventTypes::MouseEnter));
+                element
+                    .events
+                    .add(EventListener::new(ElemEventTypes::MouseLeave));
+                element
+                    .events
+                    .add(EventListener::new(ElemEventTypes::Click));
 
-                    styles.color.set(Colors::RED);
-                    styles.padding.set(Value::Value(
-                        // it works now even without this yaaay
-                        Container::This,
-                        Values::Min,
-                        Portion::Mul(0.01),
-                    ));
+                let styles = element.styles_mut();
 
-                    let rows = inner_builder.build(
+                styles.color.set(Colors::RED);
+                styles.padding.set(Value::Value(
+                    // it works now even without this yaaay
+                    Container::This,
+                    Values::Min,
+                    Portion::Mul(0.01),
+                ));
+
+                let inner_list = if (x + y) % 2 == 0 {
+                    inner_rows_builder.build(
                         |e, _| {
                             e.styles_mut().padding.set(Value::Px(50.0));
                         },
@@ -129,15 +135,37 @@ impl ApplicationHandler for App {
                             WidgetControlFlow::Done
                         },
                         gui,
-                    );
-                    element.children = Some(vec![rows]);
+                    )
+                } else {
+                    inner_columns_builder.build(
+                        |e, _| {
+                            e.styles_mut().padding.set(Value::Px(50.0));
+                        },
+                        |row, element, _| {
+                            let styles = element.styles_mut();
 
-                    WidgetControlFlow::Done
-                },
-                &mut gui,
-            );
+                            styles.padding.set(Value::Px(1.0));
+                            styles.color.set(Colors::FRgba(
+                                row as f32 * 0.1,
+                                row as f32 * 0.1,
+                                row as f32 * 0.1,
+                                1.0,
+                            ));
 
-        gui.set_entry(container);
+                            WidgetControlFlow::Done
+                        },
+                        gui,
+                    )
+                };
+
+                element.children = Some(vec![inner_list]);
+
+                WidgetControlFlow::Done
+            },
+            &mut gui,
+        );
+
+        gui.set_entry(container);*/
 
         let program = Program {
             window,
@@ -163,9 +191,12 @@ impl ApplicationHandler for App {
             App::Running(this) => this,
         };
 
-        rugui2_winit::event(&event, &mut this.gui);
+        //rugui2_winit::event(&event, &mut this.gui);
         this.gui.prepare_events();
-        while let Some(e) = this.gui.poll_event() {
+        /*while let Some(e) = this.gui.poll_event() {
+            if let Some(Msgs::Widgets(action)) = &e.msg {
+                //action.action(&e, &mut this.gui);
+            }
             let element = this.gui.get_element_mut_unchecked(e.element_key);
             match e.kind {
                 ElemEvents::CursorEnter { .. } => {
@@ -198,11 +229,11 @@ impl ApplicationHandler for App {
                         element.styles_mut().color.set(Colors::RED)
                     }
                 },
-                ElemEvents::Scroll { delta, .. } => match e.msg {
+                ElemEvents::Scroll { delta, .. } => match &e.msg {
                     Some(Msgs::ScrollBounds(bounds)) => {
-                        bounds.scroll(element, delta.1 * 0.1);
+                        bounds.scroll(element, delta * 0.1);
                     }
-                    None => (),
+                    _ => (),
                 },
                 ElemEvents::CursorMove { pos, .. } => {
                     let pos = pos / element.instance().container.size + 0.5;
@@ -243,7 +274,7 @@ impl ApplicationHandler for App {
                 }
                 _ => (),
             }
-        }
+        }*/
 
         match event {
             WindowEvent::Resized(size) => {

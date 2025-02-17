@@ -8,22 +8,24 @@ struct VertexInput {
     @location(2) rotation: f32,
     @location(3) color: vec4<f32>,
     @location(4) flags: u32,
-    @location(5) round: vec2<f32>,
-    @location(6) alpha: f32,
-    @location(7) lin_grad_p1p2: vec4<f32>,
-    @location(8) lin_grad_p1_color: vec4<f32>,
-    @location(9) lin_grad_p2_color: vec4<f32>,
-    @location(10) rad_grad_p1p2: vec4<f32>,
-    @location(11) rad_grad_p1_color: vec4<f32>,
-    @location(12) rad_grad_p2_color: vec4<f32>,
-    @location(13) texture_tint: vec4<f32>,
+    @location(5) round: f32,
+    @location(6) shadow: f32,
+    @location(7) alpha: f32,
+    @location(8) lin_grad_p1p2: vec4<f32>,
+    @location(9) lin_grad_p1_color: vec4<f32>,
+    @location(10) lin_grad_p2_color: vec4<f32>,
+    @location(11) rad_grad_p1p2: vec4<f32>,
+    @location(12) rad_grad_p1_color: vec4<f32>,
+    @location(13) rad_grad_p2_color: vec4<f32>,
+    @location(14) texture_tint: vec4<f32>,
 }
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) pixel_size: vec2<f32>,
-    @location(1) @interpolate(flat) round: vec2<f32>,
-    @location(2) @interpolate(flat) size: vec2<f32>,
+    @location(1) @interpolate(flat) round: f32,
+    @location(2) @interpolate(flat) shadow: f32,
+    @location(3) @interpolate(flat) size: vec2<f32>,
 }
 
 
@@ -35,6 +37,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     var position = vertex_position(in.index);
     out.size = in.size * 0.5;
     out.round = in.round;
+    out.shadow = in.shadow;
 
     // Scale and rotate the position
     var scale = in.size * position;
@@ -61,9 +64,9 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0)vec4<f32> {
     var pos_abs = abs(in.pixel_size);
-    if pos_abs.x > (in.size.x - in.round.x) && pos_abs.y > (in.size.y - in.round.x) {
-        let the_d = distance(pos_abs, in.size - in.round.x);
-        if the_d > in.round.x + in.round.y {
+    if pos_abs.x > (in.size.x - in.round) && pos_abs.y > (in.size.y - in.round) {
+        let the_d = distance(pos_abs, in.size - in.round);
+        if the_d > in.round {
             discard;
         }
     }

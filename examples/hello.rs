@@ -9,7 +9,7 @@ use rugui2::{
     colors::Colors,
     element::{Element, ElementKey},
     events::{ElemEventTypes, EventListener},
-    styles::{Container, Gradient, Overflow, Portion, Position, Rotation, Round, Value, Values},
+    styles::{Container, Gradient, Overflow, Portion, Position, Rotation, Value, Values},
     Gui,
 };
 use tokio::runtime::Runtime;
@@ -77,10 +77,7 @@ impl ApplicationHandler for App {
             rot: rugui2::styles::Rotations::Deg(1.0),
             cont: Container::This,
         });
-        elem.styles_mut().round.set(Some(Round {
-            size: Value::Value(Container::This, Values::Min, Portion::Half),
-            anti_aliasing: Value::Px(50.5),
-        }));
+        elem.styles_mut().round.set(Some(Value::Value(Container::This, Values::Min, Portion::Half)));
         elem.styles_mut().scroll_y.set(Value::Px(0.0));
         elem.styles_mut().overflow.set(Overflow::Hidden);
         elem.events.add(EventListener {
@@ -101,30 +98,8 @@ impl ApplicationHandler for App {
             Values::Height,
             Portion::Half,
         ));
-        elem2.styles_mut().round.set(Some(Round {
-            size: Value::Value(Container::This, Values::Min, Portion::Half),
-            anti_aliasing: Value::Px(0.0),
-        }));
-        /*elem2.styles_mut().align.get_mut().height =
-        Value::Value(Container::This, Values::Height, Portion::Full);*/
-        elem2.styles_mut().grad_radial.set(Some(Gradient {
-            p1: (
-                Position {
-                    width: Value::Value(Container::Container, Values::Width, Portion::Half),
-                    height: Value::Value(Container::Container, Values::Height, Portion::Half),
-                    container: Container::This,
-                },
-                Colors::RED,
-            ),
-            p2: (
-                Position {
-                    width: Value::Value(Container::This, Values::Width, Portion::Half),
-                    height: Value::Value(Container::This, Values::Height, Portion::Half),
-                    container: Container::This,
-                },
-                Colors::GREEN,
-            ),
-        }));
+        elem2.styles_mut().round.set(Some(Value::Value(Container::This, Values::Min, Portion::Half)));
+        elem2.styles_mut().color.set(Colors::GREEN);
         elem2
             .events
             .add(EventListener::new(ElemEventTypes::MouseMove));
@@ -161,17 +136,17 @@ impl ApplicationHandler for App {
             App::Running(this) => this,
         };
 
-        rugui2_winit::event(&event, &mut this.gui);
+        //rugui2_winit::event(&event, &mut this.gui);
         this.gui.prepare_events();
         while let Some(e) = this.gui.poll_event() {
             match e.kind {
-                rugui2::events::ElemEvents::CursorMove { pos, prev_pos: _ } => {
+                /*rugui2::events::ElemEvents::CursorMove { pos, .. } => {
                     let elem = this.gui.get_element_mut(this.element_key2).unwrap();
                     let size = elem.instance().container.size;
                     let grad = elem.styles_mut().grad_radial.get_mut().as_mut().unwrap();
                     grad.p1.0 = (pos + size * 0.5).into();
                     grad.p2.0 = (pos + size * 0.5 + 50.0).into();
-                }
+                }*/
                 rugui2::events::ElemEvents::Scroll { delta, pos: _ } => {
                     let elem = this.gui.get_element_mut(e.element_key).unwrap();
                     match elem.styles_mut().scroll_y.get_mut() {

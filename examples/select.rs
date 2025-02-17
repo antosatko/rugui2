@@ -9,7 +9,7 @@ use rugui2::{
     colors::Colors,
     element::{Element, ElementKey},
     events::{ElemEvents, EventListener, SelectionStates},
-    styles::{Container, Gradient, Image, Portion, Position, Rotation, Round, Value, Values},
+    styles::{Container, Gradient, Image, Portion, Position, Rotation, Value, Values},
     Gui,
 };
 use tokio::runtime::Runtime;
@@ -73,10 +73,7 @@ impl ApplicationHandler for App {
             cont: Container::This,
             rot: rugui2::styles::Rotations::CalcDeg(Value::Time),
         });
-        elem.styles_mut().round.set(Some(Round {
-            size: Value::Px(100.0),
-            anti_aliasing: Value::Px(0.0),
-        }));
+        elem.styles_mut().round.set(Some(Value::Px(100.0)));
         elem.styles_mut()
             .width
             .set(Value::Value(Container::Image, Values::Width, Portion::Full));
@@ -92,9 +89,6 @@ impl ApplicationHandler for App {
         for i in 0..CHILDREN as u32 {
             let mut child = Element::default();
             child.label = Some(format!("Child: {i}"));
-
-            child.allow_select = true;
-            child.allow_text_input = true;
 
             let styles = child.styles_mut();
             let ratio = 1.0 / CHILDREN;
@@ -170,7 +164,7 @@ impl ApplicationHandler for App {
             App::Running(this) => this,
         };
 
-        rugui2_winit::event(&event, &mut this.gui);
+        //rugui2_winit::event(&event, &mut this.gui);
         this.gui.prepare_events();
         while let Some(e) = this.gui.poll_event() {
             match e.kind {
@@ -200,7 +194,10 @@ impl ApplicationHandler for App {
                 },
                 ElemEvents::Click { press: true, .. } => {
                     this.gui.env_event(rugui2::events::EnvEvents::Select {
-                        opt: rugui2::events::SelectOpts::SelectKey(e.element_key),
+                        opt: rugui2::events::SelectOpts::SelectKey {
+                            key: e.element_key,
+                            force: true,
+                        },
                     });
                 }
                 _ => (),

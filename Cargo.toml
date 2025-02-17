@@ -9,8 +9,6 @@ categories = ["rendering", "gui", "game-development", "rendering::engine"]
 license = "MIT"
 
 
-[dependencies]
-
 [dev-dependencies]
 tokio = { version = "1.42.0", features = ["full"] }
 winit = "0.30.5"
@@ -25,4 +23,8 @@ debug = true
 
 
 [workspace]
-members = ["examples/common", "rugui2_wgpu", "rugui2_winit"]
+members = ["examples/common", "examples/editor", "examples/game", "rugui2_wgpu", "rugui2_winit"]
+
+[dependencies]
+ropey = "1.6.1"
+swash = "0.2.0"

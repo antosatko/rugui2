@@ -1,4 +1,3 @@
-
 #[derive(Debug, Clone, Default)]
 pub struct Variables {
     variables: Vec<Variable>,
@@ -51,8 +50,8 @@ impl Variables {
     pub fn set(&mut self, key: VarKey, value: f32) -> Result<f32, VarError> {
         let v = if let Some(v) = self.variables.get_mut(key.raw() as usize) {
             v
-        }else {
-            return Err(VarError::NotFound)
+        } else {
+            return Err(VarError::NotFound);
         };
 
         v.set(value)
@@ -61,21 +60,29 @@ impl Variables {
     pub fn set_const(&mut self, key: VarKey, value: f32) -> Result<f32, VarError> {
         let v = if let Some(v) = self.variables.get_mut(key.raw() as usize) {
             v
-        }else {
-            return Err(VarError::NotFound)
+        } else {
+            return Err(VarError::NotFound);
         };
-        
+
         v.set_const(value)
     }
 }
 
 impl Variable {
     pub fn new_var() -> Self {
-        Self { initialized: false, value: 0.0, kind: VarKind::Variable }
+        Self {
+            initialized: false,
+            value: 0.0,
+            kind: VarKind::Variable,
+        }
     }
 
     pub fn new_const(value: f32) -> Self {
-        Self { initialized: true, value, kind: VarKind::Constant }
+        Self {
+            initialized: true,
+            value,
+            kind: VarKind::Constant,
+        }
     }
 
     pub fn prepare(&mut self) {

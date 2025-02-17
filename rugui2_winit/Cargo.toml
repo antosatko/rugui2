@@ -6,3 +6,8 @@ edition = "2021"
 [dependencies]
 winit = "0.30.5"
 rugui2 = {path = "../"}
+arboard = {version = "3.4.1", optional = true}
+
+[features]
+default = ["clipboard"]
+clipboard = ["dep:arboard"]

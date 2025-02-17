@@ -34,11 +34,32 @@ impl Colors {
             Colors::FRgba(r, g, b, _) => Self::FRgba(*r, *g, *b, alpha),
         }
     }
+
+    pub fn with_red(&self, red: f32) -> Self {
+        match self {
+            Colors::FHsl(_, _, _) => *self,
+            Colors::FRgba(_, g, b, a) => Self::FRgba(red, *g, *b, *a),
+        }
+    }
+
+    pub fn with_green(&self, green: f32) -> Self {
+        match self {
+            Colors::FHsl(_, _, _) => *self,
+            Colors::FRgba(r, _, b, a) => Self::FRgba(*r, green, *b, *a),
+        }
+    }
+
+    pub fn with_blue(&self, blue: f32) -> Self {
+        match self {
+            Colors::FHsl(_, _, _) => *self,
+            Colors::FRgba(r, g, _, a) => Self::FRgba(*r, *g, blue, *a),
+        }
+    }
 }
 
 impl From<f32> for Colors {
     fn from(value: f32) -> Self {
-        Self::FRgba(1.0, 1.0 , 1.0, value)
+        Self::FRgba(1.0, 1.0, 1.0, value)
     }
 }
 
@@ -90,7 +111,7 @@ impl Colors {
             _ if (hue >= 120.0 && hue < 180.0) => (0.0, c, x),
             _ if (hue >= 180.0 && hue < 240.0) => (0.0, x, c),
             _ if (hue >= 240.0 && hue <= 300.0) => (x, 0.0, c),
-            _ => ((c + m), (m - x), (m - x))
+            _ => ((c + m), (m - x), (m - x)),
         }
     }
 }

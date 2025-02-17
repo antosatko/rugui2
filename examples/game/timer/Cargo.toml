@@ -1,0 +1,11 @@
+[package]
+name = "timer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+spin_sleep = { version = "1.2.0", optional = true }
+serde = { version = "1.0.203", optional = true }
+
+[features]
+spin_sleep = ["dep:spin_sleep"]

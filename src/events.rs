@@ -28,6 +28,8 @@ pub enum EnvEvents {
         key: Key,
         press: bool,
     },
+    Copy,
+    Paste(String),
 }
 
 #[derive(Debug, Clone)]
@@ -46,11 +48,13 @@ pub enum EnvEventCategories {
 pub struct EventListeners<Msg: Clone> {
     pub(crate) mouse_move: Vec<EventListener<Msg>>,
     pub(crate) click: Vec<EventListener<Msg>>,
-    pub(crate) hover: Vec<EventListener<Msg>>,
     pub(crate) scroll: Vec<EventListener<Msg>>,
     pub(crate) file_drop: Vec<EventListener<Msg>>,
     pub(crate) text_input: Vec<EventListener<Msg>>,
     pub(crate) key_press: Vec<EventListener<Msg>>,
+    pub(crate) mouse_enter: Vec<EventListener<Msg>>,
+    pub(crate) mouse_leave: Vec<EventListener<Msg>>,
+    pub(crate) selection: Vec<EventListener<Msg>>,
 }
 
 impl<Msg: Clone> EventListeners<Msg> {
@@ -58,11 +62,13 @@ impl<Msg: Clone> EventListeners<Msg> {
         Self {
             mouse_move: Vec::with_capacity(0),
             click: Vec::with_capacity(0),
-            hover: Vec::with_capacity(0),
             scroll: Vec::with_capacity(0),
             file_drop: Vec::with_capacity(0),
             text_input: Vec::with_capacity(0),
             key_press: Vec::with_capacity(0),
+            mouse_enter: Vec::with_capacity(0),
+            mouse_leave: Vec::with_capacity(0),
+            selection: Vec::with_capacity(0),
         }
     }
 
@@ -70,11 +76,13 @@ impl<Msg: Clone> EventListeners<Msg> {
         match listener.event {
             ElemEventTypes::MouseMove => self.mouse_move.push(listener),
             ElemEventTypes::Click => self.click.push(listener),
-            ElemEventTypes::Hover => self.hover.push(listener),
             ElemEventTypes::Scroll => self.scroll.push(listener),
             ElemEventTypes::FileDrop => self.file_drop.push(listener),
             ElemEventTypes::TextInput => self.text_input.push(listener),
             ElemEventTypes::KeyPress => self.key_press.push(listener),
+            ElemEventTypes::MouseEnter => self.mouse_enter.push(listener),
+            ElemEventTypes::MouseLeave => self.mouse_leave.push(listener),
+            ElemEventTypes::Selection => self.selection.push(listener),
         }
     }
 }
@@ -120,7 +128,7 @@ pub enum SelectOpts {
     Confirm,
     Lock,
     Unlock,
-    SelectKey(ElementKey),
+    SelectKey { key: ElementKey, force: bool },
     NoFocus,
 }
 
@@ -148,6 +156,7 @@ pub enum ElemEvents {
     CursorMove {
         pos: Vector,
         prev_pos: Vector,
+        vp_pos: Vector,
     },
     Click {
         button: MouseButtons,
@@ -178,6 +187,25 @@ pub enum ElemEvents {
         press: bool,
         key: Key,
     },
+    TextCopy {
+        text: String,
+    },
+}
+
+impl ElemEvents {
+    pub fn get_scroll_delta(&self) -> Option<Vector> {
+        match self {
+            Self::Scroll { delta, .. } => Some(*delta),
+            _ => None,
+        }
+    }
+
+    pub fn get_clicked(&self) -> bool {
+        match self {
+            Self::Click { press, .. } => *press,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -191,11 +219,13 @@ pub enum ListenerTypes {
 pub enum ElemEventTypes {
     MouseMove,
     Click,
-    Hover,
+    MouseEnter,
+    MouseLeave,
     Scroll,
     FileDrop,
     TextInput,
     KeyPress,
+    Selection,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -221,6 +251,8 @@ impl From<EnvEvents> for EnvEventCategories {
             EnvEvents::Select { .. } => EnvEventCategories::Once,
             EnvEvents::Input { .. } => EnvEventCategories::Once,
             EnvEvents::KeyPress { .. } => EnvEventCategories::Global,
+            EnvEvents::Copy => EnvEventCategories::Once,
+            EnvEvents::Paste(txt) => todo!("pasting: {txt}"),
         }
     }
 }
@@ -930,4 +962,105 @@ pub enum Key {
     F34,
     /// General-purpose function key.
     F35,
+    Backquote,
+    Backslash,
+    BracketLeft,
+    BracketRight,
+    Comma,
+    Digit0,
+    Digit1,
+    Digit2,
+    Digit3,
+    Digit4,
+    Digit5,
+    Digit6,
+    Digit7,
+    Digit8,
+    Digit9,
+    Equal,
+    IntlBackslash,
+    IntlRo,
+    IntlYen,
+    KeyA,
+    KeyB,
+    KeyC,
+    KeyD,
+    KeyE,
+    KeyF,
+    KeyG,
+    KeyH,
+    KeyI,
+    KeyJ,
+    KeyK,
+    KeyL,
+    KeyM,
+    KeyN,
+    KeyO,
+    KeyP,
+    KeyQ,
+    KeyR,
+    KeyS,
+    KeyT,
+    KeyU,
+    KeyV,
+    KeyW,
+    KeyX,
+    KeyY,
+    KeyZ,
+    Minus,
+    Period,
+    Quote,
+    Semicolon,
+    Slash,
+    AltLeft,
+    AltRight,
+    ControlLeft,
+    ControlRight,
+    SuperLeft,
+    SuperRight,
+    ShiftLeft,
+    ShiftRight,
+    Lang1,
+    Lang2,
+    Lang3,
+    Lang4,
+    Lang5,
+    Numpad0,
+    Numpad1,
+    Numpad2,
+    Numpad3,
+    Numpad4,
+    Numpad5,
+    Numpad6,
+    Numpad7,
+    Numpad8,
+    Numpad9,
+    NumpadAdd,
+    NumpadBackspace,
+    NumpadClear,
+    NumpadClearEntry,
+    NumpadComma,
+    NumpadDecimal,
+    NumpadDivide,
+    NumpadEnter,
+    NumpadEqual,
+    NumpadHash,
+    NumpadMemoryAdd,
+    NumpadMemoryClear,
+    NumpadMemoryRecall,
+    NumpadMemoryStore,
+    NumpadMemorySubtract,
+    NumpadMultiply,
+    NumpadParenLeft,
+    NumpadParenRight,
+    NumpadStar,
+    NumpadSubtract,
+    LaunchApp1,
+    LaunchApp2,
+    MediaSelect,
+    Sleep,
+    Turbo,
+    Abort,
+    Resume,
+    Suspend,
 }

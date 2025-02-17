@@ -5,15 +5,18 @@ use element::{Container, *};
 use events::*;
 use math::*;
 use styles::*;
-use variables::Variables;
+use text::{FontIdx, Paragraph, Rect, TextProccesor, TextRepr, TextSelection};
+use variables::{VarKey, Variables};
 
 pub mod colors;
 pub mod element;
 pub mod events;
 pub mod math;
 pub mod styles;
+pub mod text;
 pub mod variables;
 pub mod widgets;
+pub mod rich_text;
 
 pub struct Gui<Msg: Clone = (), Img: Clone + ImageData = ()> {
     elements: Vec<Element<Msg, Img>>,
@@ -25,6 +28,8 @@ pub struct Gui<Msg: Clone = (), Img: Clone + ImageData = ()> {
     events: Vec<events::ElemEvent<Msg>>,
     pub selection: Selection,
     file_drop_hover: Option<PathBuf>,
+    pub text_ctx: TextProccesor,
+    pub update_time: f32,
 }
 
 impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
@@ -44,6 +49,8 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
             events: Vec::new(),
             selection: Selection::default(),
             file_drop_hover: None,
+            text_ctx: TextProccesor::new(),
+            update_time: 0.0,
         }
     }
 
@@ -68,8 +75,184 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         self.selection.selectables.clear();
         self.variables.prepare();
         self.update_element(entry, container, vp, time);
+        self.selection.post_update();
 
         self.viewport.clean();
+        self.update_time = time;
+    }
+
+    fn resize_prolog(
+        element: &mut Element<Msg, Img>,
+        element_container: &mut ContainerWrapper,
+        container: &ContainerWrapper,
+        container_transforms: &Container,
+        variables: &mut Variables,
+        vp: &Container,
+        time: f32,
+        image: &Vector,
+    ) -> bool {
+        let styles = &mut element.styles;
+        let mut transform_update = false;
+        /*println!("styles.width.is_dirty()
+            || container.dirty_size()
+            || styles.max_width.is_dirty()
+            || styles.min_width.is_dirty()
+            || styles.padding.is_dirty()
+            :
+            ({:?})",(styles.width.is_dirty()
+            , container.dirty_size()
+            , styles.max_width.is_dirty()
+            , styles.min_width.is_dirty()
+            , styles.padding.is_dirty()));*/
+        if styles.width.is_dirty()
+            || container.dirty_size()
+            || styles.max_width.is_dirty()
+            || styles.min_width.is_dirty()
+            || styles.padding.is_dirty()
+            || true // FIXME
+        {
+            let width = styles.width.fix_dirty_force();
+            let max = styles.max_width.fix_dirty_force();
+            let min = styles.min_width.fix_dirty_force();
+            let containers = &Containers {
+                container: container_transforms,
+                vp,
+                this: element_container.get(),
+                image,
+                time,
+            };
+
+            let mut width = width.calc(containers, variables);
+            if let Some(max) = max {
+                width = width.min(max.calc(containers, variables));
+            }
+            if let Some(min) = min {
+                width = width.max(min.calc(containers, variables));
+            }
+
+            if element_container.get().size.0 != width {
+                element_container.size_mut().0 = width;
+                transform_update |= true;
+            }
+        }
+
+        if styles.height.is_dirty()
+            || container.dirty_size()
+            || styles.max_height.is_dirty()
+            || styles.min_height.is_dirty()
+            || styles.padding.is_dirty()
+            || true // FIXME
+        {
+            let containers = &Containers {
+                container: container_transforms,
+                vp,
+                this: element_container.get(),
+                image,
+                time,
+            };
+            let style = styles.height.fix_dirty_force();
+            let max = styles.max_height.fix_dirty_force();
+            let min = styles.min_height.fix_dirty_force();
+
+            let mut height = style.calc(containers, variables);
+            if let Some(max) = max {
+                height = height.min(max.calc(containers, variables));
+            }
+            if let Some(min) = min {
+                height = height.max(min.calc(containers, variables));
+            }
+
+            if element_container.get().size.1 != height {
+                element_container.size_mut().1 = height;
+                transform_update |= true;
+            }
+        }
+        if element_container.dirty_size() || styles.padding.is_dirty() {
+            let size = element_container.get().size;
+            let containers = &Containers {
+                container: container_transforms,
+                vp,
+                this: element_container.get(),
+                image,
+                time,
+            };
+            let padding = styles.padding.fix_dirty_force().calc(containers, variables);
+            element_container.set_size((size - padding).max(0.0));
+            element.instance.padding = padding;
+        }
+        transform_update
+    }
+    fn position_prolog(
+        element: &mut Element<Msg, Img>,
+        element_container: &mut ContainerWrapper,
+        container: &ContainerWrapper,
+        variables: &mut Variables,
+        vp: &Container,
+        time: f32,
+        image: &Vector,
+        mut transform_update: bool,
+    ) -> bool {
+        let styles = &mut element.styles;
+        let container_transforms = container.get();
+
+        if container.dirty_pos()
+            || container.dirty_rotation()
+            || container.dirty_size()
+            || styles.origin.is_dirty()
+            || styles.position.is_dirty()
+        {
+            element_container.set_pos(container_transforms.pos);
+            let containers = &Containers {
+                container: container_transforms,
+                vp,
+                this: element_container.get(),
+                image,
+                time,
+            };
+
+            let center = styles.position.get().calc(containers, variables);
+            let align = styles.origin.get().calc_relative(containers, variables);
+
+            let result = center - align;
+            transform_update = element_container.get().pos != result;
+            element_container.set_pos(result);
+        }
+        transform_update
+    }
+
+    fn rotation_prolog(
+        element: &mut Element<Msg, Img>,
+        element_container: &mut ContainerWrapper,
+        container: &ContainerWrapper,
+        variables: &mut Variables,
+        vp: &Container,
+        time: f32,
+        image: &Vector,
+        transform_update: bool,
+    ) {
+        let styles = &mut element.styles;
+        let container_transforms = container.get();
+
+        if transform_update || container.dirty_rotation() {
+            let elem = element_container.get();
+            if container_transforms.rotation != 0.0 && container_transforms.pos != elem.pos {
+                let pos = elem
+                    .pos
+                    .rotate_around_point(&container_transforms.pos, container_transforms.rotation);
+                element_container.set_pos(pos);
+            };
+        }
+        if styles.rotation.is_dirty() || container.dirty_rotation() {
+            let containers = &Containers {
+                container: container_transforms,
+                vp,
+                this: element_container.get(),
+                image,
+                time,
+            };
+            let rot = styles.rotation.get().calc(containers, variables);
+            element_container.set_rotation(rot);
+        }
     }
 
     fn update_element(
@@ -83,7 +266,7 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         let element = &mut self.elements[key.0 as usize];
         let styles = &mut element.styles;
 
-        if element.allow_select {
+        if element.events.selection.len() > 0 {
             self.selection.selectables.push(key);
         }
 
@@ -119,110 +302,65 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
             };
         }
 
+        let containers = &Containers {
+            container: container_transforms,
+            vp,
+            this: element_container.get(),
+            image,
+            time,
+        };
+        for proc in &element.procedures {
+            proc.calc(containers, variables);
+        }
+
         // --- TRANSFORMS ---
         //
         // SIZE
         //
-        if styles.width.is_dirty()
-            || container.dirty_size()
-            || styles.max_width.is_dirty()
-            || styles.min_width.is_dirty()
-            || styles.padding.is_dirty()
-        {
-            let width = styles.width.fix_dirty_force();
-            let max = styles.max_width.fix_dirty_force();
-            let min = styles.min_width.fix_dirty_force();
-            let containers = make_containers!();
-
-            let mut width = width.calc(containers, variables);
-            if let Some(max) = max {
-                width = width.min(max.calc(containers, variables));
-            }
-            if let Some(min) = min {
-                width = width.max(min.calc(containers, variables));
-            }
-
-            if element_container.get().size.0 != width {
-                element_container.size_mut().0 = width;
-            }
-        }
-
-        if styles.height.is_dirty()
-            || container.dirty_size()
-            || styles.max_height.is_dirty()
-            || styles.min_height.is_dirty()
-            || styles.padding.is_dirty()
-        {
-            let containers = make_containers!();
-            let style = styles.height.fix_dirty_force();
-            let max = styles.max_height.fix_dirty_force();
-            let min = styles.min_height.fix_dirty_force();
-
-            let mut height = style.calc(containers, variables);
-            if let Some(max) = max {
-                height = height.min(max.calc(containers, variables));
-            }
-            if let Some(min) = min {
-                height = height.max(min.calc(containers, variables));
-            }
-
-            if element_container.get().size.1 != height {
-                element_container.size_mut().1 = height;
-            }
-        }
-        if element_container.dirty_size() {
-            let size = element_container.get().size;
-            let containers = make_containers!();
-            let padding = styles.padding.fix_dirty_force().calc(containers, variables);
-            element_container.set_size(size - padding);
-        }
+        let mut transform_update = Self::resize_prolog(
+            element,
+            &mut element_container,
+            container,
+            container_transforms,
+            variables,
+            vp,
+            time,
+            image,
+        );
 
         //
         // POSITION
         // - dependent on size
         //
-        if container.dirty_pos()
-            || container.dirty_rotation()
-            || container.dirty_size()
-            || styles.origin.is_dirty()
-            || styles.position.is_dirty()
-        {
-            element_container.set_pos(container_transforms.pos);
-            let containers = make_containers!();
-
-            let center = styles.position.get().calc(containers, variables);
-            let align = styles.origin.get().calc_relative(containers, variables);
-
-            element_container.set_pos(center - align);
-        }
+        transform_update |= Self::position_prolog(
+            element,
+            &mut element_container,
+            container,
+            variables,
+            vp,
+            time,
+            image,
+            transform_update,
+        );
 
         //
         // ROTATION
         // - dependent on position
+        Self::rotation_prolog(
+            element,
+            &mut element_container,
+            container,
+            variables,
+            vp,
+            time,
+            image,
+            transform_update,
+        );
         //
-        if element_container.dirty_pos() || container.dirty_rotation() {
-            let elem = element_container.get();
-            if container_transforms.rotation != 0.0 && container_transforms.pos != elem.pos {
-                let pos = elem
-                    .pos
-                    .rotate_around_point(&container_transforms.pos, container_transforms.rotation);
-                element_container.set_pos(pos);
-            };
-        }
-        if styles.rotation.is_dirty() || container.dirty_rotation() {
-            let containers = make_containers!();
-            let rot = styles.rotation.get().calc(containers, variables);
-            element_container.set_rotation(rot);
-        }
         // --- TRANSFORMS ---
 
-        if element.procedures.len() > 0 {
-            let containers = make_containers!();
-            for procedure in &element.procedures {
-                procedure.calc(containers, variables);
-            }
-        }
 
+        let styles = &mut element.styles;
         let element_container_c = element_container.get();
 
         macro_rules! make_containers {
@@ -239,14 +377,16 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         let containers = make_containers!();
 
         // --- TRANSFORM-DEPENDENT ---
-        let transform_update = element_container.dirty_size()
-            || element_container.dirty_pos()
-            || element_container.dirty_rotation();
         if transform_update || styles.round.is_dirty() {
             if let Some(rnd) = styles.round.get() {
-                let size = rnd.size.calc(containers, variables);
-                let smooth = rnd.anti_aliasing.calc(containers, variables);
-                element.instance.round = [size, smooth];
+                let size = rnd.calc(containers, variables);
+                element.instance.round = size;
+            }
+        }
+        if transform_update || styles.shadow.is_dirty() {
+            if let Some(rnd) = styles.shadow.get() {
+                let size = rnd.calc(containers, variables);
+                element.instance.shadow = size;
             }
         }
         if transform_update || styles.grad_linear.is_dirty() {
@@ -275,13 +415,46 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                 element.instance.remove_flag(Flags::RadialGradient);
             }
         }
+        //          --- TEXT-THINGS ---
+        let mut text_update = false;
+        if styles.text.get().is_some() {
+            if transform_update || styles.font_size.is_dirty() {
+                text_update = true;
+                element.instance.font_size = styles
+                    .font_size
+                    .fix_dirty_force()
+                    .calc(containers, variables)
+                    .max(1.0);
+            }
+            if let Some(color) = styles.font_color.fix_dirty() {
+                element.instance.font_color = (*color).into()
+            }
+            if let Some(wrap) = styles.text_wrap.fix_dirty() {
+                element.instance.text_wrap = match wrap {
+                    TextWrap::Overflow => false,
+                    TextWrap::Wrap => true,
+                }
+            }
+            if let Some(align) = styles.text_align.fix_dirty() {
+                element.instance.text_align = match align {
+                    TextAlign::Left => 0.0,
+                    TextAlign::Center => 0.5,
+                    TextAlign::Right => 1.0,
+                    TextAlign::Portion(p) => p.calc(),
+                }
+            }
+        }
+        //          --- TEXT-THINGS ---
         // --- TRANSFORM-DEPENDENT ---
 
         // --- TRANSFORM-INDEPENDENT ---
-        if let Some(tint) = styles.image_tint.fix_dirty() {
-            element.instance.image_tint = (*tint).into();
-        }
         if element.dirty_styles {
+            if let Some(tint) = styles.image_tint.fix_dirty() {
+                element.instance.image_tint = (*tint).into();
+            }
+            if let Some(alpha) = styles.shadow_alpha.fix_dirty() {
+                element.instance.shadow_alpha = *alpha;
+            }
             if let Some(c) = styles.color.fix_dirty() {
                 element.instance.color = (*c).into()
             }
@@ -292,6 +465,9 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                 Some(Overflow::Hidden) => element.instance.set_flag(Flags::OverflowHidden),
                 Some(Overflow::Shown) => element.instance.remove_flag(Flags::OverflowHidden),
                 None => (),
+            }
+            if let Some(font) = styles.font.fix_dirty() {
+                element.instance.font = font.0;
             }
 
             element.dirty_styles = false;
@@ -309,11 +485,13 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         // --- EVENTS ---
 
         // --- PREPARE-NEXT-ELEMENTS ---
+        let mut dirty_scroll = false;
         if transform_update || styles.scroll_y.is_dirty() {
             let scroll = styles
                 .scroll_y
                 .fix_dirty_force()
                 .calc(containers, variables);
+            dirty_scroll = element.instance.scroll.1 != scroll;
             element.instance.scroll.1 = scroll;
         }
         if transform_update || styles.scroll_x.is_dirty() {
@@ -322,13 +500,36 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                 .scroll_x
                 .fix_dirty_force()
                 .calc(containers, variables);
+            dirty_scroll = element.instance.scroll.0 != scroll;
             element.instance.scroll.0 = scroll;
         }
-        if let Some(margin) = styles.margin.fix_dirty_force() {
-            let margin = margin.calc(containers, variables);
-            let size = element_container.get().size;
-            element_container.set_size(size - margin);
+        //          --- TEXT-PROCCESSING ---
+        // this is dependent on scroll
+        if element_container.dirty_size()
+            || element_container.dirty_pos()
+            || text_update
+            || dirty_scroll
+            || styles.text.is_dirty()
+        {
+            if let Some(text) = styles.text.fix_dirty_force_mut() {
+                let bounds = Rect::new(
+                    -element_container_c.size.0 * 0.5,
+                    -element_container_c.size.1 * 0.5,
+                    element_container_c.size.0,
+                    element_container_c.size.1,
+                );
+                self.text_ctx.procces(
+                    FontIdx(element.instance.font),
+                    &mut text.text,
+                    element.instance.font_size,
+                    bounds,
+                    element.instance.text_wrap,
+                    element.instance.text_align,
+                    element.instance.scroll,
+                );
+            }
         }
+        //          --- TEXT-PROCCESSING ---
         if !element.instance.scroll.is_zero() {
             let cont = element_container.get();
             let angle = cont.rotation;
@@ -338,6 +539,9 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
             element_container.set_pos(displaced);
         }
         // --- PREPARE-NEXT-ELEMENTS ---
+
+        assert!(styles.fit_text_width.get().is_none());
+        assert!(styles.fit_text_height.get().is_none());
 
         if let Some(children) = element.children.take() {
             for child in &children {
@@ -351,22 +555,78 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         match &event {
             EnvEvents::Input { text } => {
                 if let Some(key) = self.selection.current {
-                    if let Some(e) = self.get_element(key) {
-                        if e.allow_text_input {
+                    if let Some(e) = self.elements.get(key.raw() as usize) {
+                        for e in &e.events.text_input {
                             self.events.push(ElemEvent {
                                 kind: ElemEvents::TextInput { text: text.clone() },
                                 element_key: key,
-                                msg: None,
+                                msg: e.msg.clone(),
                             });
                         }
                     }
                 }
             }
             EnvEvents::KeyPress { .. } => {}
-            EnvEvents::MouseButton { .. } => (),
+            EnvEvents::MouseButton { press, .. } => {
+                self.cursor.down = *press;
+                /*match (self.selection.current, *press) {
+                    (Some(key), true) => {
+                        let elem = &mut self.elements[key.raw() as usize];
+                        if let Some(TextRepr {
+                            paragraph: Some(paragraph),
+                            text,
+                            ..
+                        }) = elem.styles.text.get_mut()
+                        {
+                            if let (true, pos) = self
+                                .cursor
+                                .current
+                                .container_colision_with_pos(&elem.instance.container)
+                            {
+                                paragraph.selection = text.hit(pos).map(|hit| TextSelection {
+                                    start: hit,
+                                    end: hit,
+                                    sorted: (hit, hit),
+                                });
+                            }
+
+                            elem.styles.text.fix_dirty();
+                        }
+                    }
+                    _ => (),
+                }*/
+            }
             EnvEvents::CursorMove { pos } => {
                 self.cursor.last = self.cursor.current;
                 self.cursor.current = *pos;
+                match (self.selection.current, self.cursor.down) {
+                    (Some(key), true) => {
+                        let elem = &mut self.elements[key.raw() as usize];
+                        if let Some(text) = elem.styles.text.get_mut() {
+                            if let Some(Some(selection)) = text.variant.selection_mut() {
+                                if let (true, pos) = self
+                                    .cursor
+                                    .current
+                                    .container_colision_with_pos(&elem.instance.container)
+                                {
+                                    let hit = text.text.hit(pos);
+                                    if let Some(hit) = hit {
+                                        selection.end = hit;
+                                        selection.sort();
+                                    }
+                                    if let (Some(editor), Some(hit)) =
+                                        (text.variant.editor_mut(), hit)
+                                    {
+                                        editor.cursor.move_to_idx(hit, &text.text);
+                                    }
+                                }
+
+                                elem.styles.text.fix_dirty();
+                            }
+                        }
+                    }
+                    _ => (),
+                }
             }
             EnvEvents::Scroll { .. } => (),
             EnvEvents::FileDrop { path, opt } => match opt {
@@ -381,22 +641,33 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                             return EnvEventStates::Free;
                         }
                         if let Some(key) = self.selection.current {
-                            self.events.push(ElemEvent {
-                                kind: ElemEvents::Selection {
-                                    state: SelectionStates::Leave,
-                                },
-                                element_key: key,
-                                msg: None,
-                            });
+                            let element = &mut self.elements[key.raw() as usize];
+                            if let Some(text) = element.styles_mut().text.get_mut() {
+                                if let Some(selection) = text.variant.selection_mut() {
+                                    *selection = None;
+                                }
+                            }
+                            for listener in &element.events.selection {
+                                self.events.push(ElemEvent {
+                                    kind: ElemEvents::Selection {
+                                        state: SelectionStates::Leave,
+                                    },
+                                    element_key: key,
+                                    msg: listener.msg.clone(),
+                                });
+                            }
                         }
                         if let Some(key) = self.selection.next() {
-                            self.events.push(ElemEvent {
-                                kind: ElemEvents::Selection {
-                                    state: SelectionStates::Enter,
-                                },
-                                element_key: key,
-                                msg: None,
-                            });
+                            let element = &self.elements[key.raw() as usize];
+                            for listener in &element.events.selection {
+                                self.events.push(ElemEvent {
+                                    kind: ElemEvents::Selection {
+                                        state: SelectionStates::Enter,
+                                    },
+                                    element_key: key,
+                                    msg: listener.msg.clone(),
+                                });
+                            }
                         }
                     }
                     SelectOpts::Prev => {
@@ -404,73 +675,133 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                             return EnvEventStates::Free;
                         }
                         if let Some(key) = self.selection.current {
-                            self.events.push(ElemEvent {
-                                kind: ElemEvents::Selection {
-                                    state: SelectionStates::Leave,
-                                },
-                                element_key: key,
-                                msg: None,
-                            });
+                            let element = &mut self.elements[key.raw() as usize];
+                            if let Some(text) = element.styles_mut().text.get_mut() {
+                                if let Some(selection) = text.variant.selection_mut() {
+                                    *selection = None;
+                                }
+                            }
+                            for listener in &element.events.selection {
+                                self.events.push(ElemEvent {
+                                    kind: ElemEvents::Selection {
+                                        state: SelectionStates::Leave,
+                                    },
+                                    element_key: key,
+                                    msg: listener.msg.clone(),
+                                });
+                            }
                         }
                         if let Some(key) = self.selection.prev() {
-                            self.events.push(ElemEvent {
-                                kind: ElemEvents::Selection {
-                                    state: SelectionStates::Enter,
-                                },
-                                element_key: key,
-                                msg: None,
-                            });
+                            let element = &self.elements[key.raw() as usize];
+                            for listener in &element.events.selection {
+                                self.events.push(ElemEvent {
+                                    kind: ElemEvents::Selection {
+                                        state: SelectionStates::Enter,
+                                    },
+                                    element_key: key,
+                                    msg: listener.msg.clone(),
+                                });
+                            }
                         }
                     }
                     SelectOpts::Confirm => {
                         if let Some(key) = self.selection.current {
-                            self.events.push(ElemEvent {
-                                kind: ElemEvents::Selection {
-                                    state: SelectionStates::Confirm,
-                                },
-                                element_key: key,
-                                msg: None,
-                            });
+                            let element = &self.elements[key.raw() as usize];
+                            for listener in &element.events.selection {
+                                self.events.push(ElemEvent {
+                                    kind: ElemEvents::Selection {
+                                        state: SelectionStates::Confirm,
+                                    },
+                                    element_key: key,
+                                    msg: listener.msg.clone(),
+                                });
+                            }
                         }
                     }
                     SelectOpts::Lock => self.selection.locked = true,
                     SelectOpts::Unlock => self.selection.locked = false,
-                    SelectOpts::SelectKey(selected_key) => {
-                        let (prev_key, selected_key) = self.selection.select_element(*selected_key);
+                    SelectOpts::SelectKey { key, force } => {
+                        let (prev_key, selected_key) = if *force {
+                            self.selection.select_element_unchecked(*key)
+                        } else {
+                            self.selection.select_element(*key)
+                        };
                         if let Some(element_key) = selected_key {
-                            self.events.push(ElemEvent {
-                                kind: ElemEvents::Selection {
-                                    state: SelectionStates::Enter,
-                                },
-                                element_key,
-                                msg: None,
-                            });
+                            let element = &self.elements[element_key.raw() as usize];
+                            for listener in &element.events.selection {
+                                self.events.push(ElemEvent {
+                                    kind: ElemEvents::Selection {
+                                        state: SelectionStates::Enter,
+                                    },
+                                    element_key,
+                                    msg: listener.msg.clone(),
+                                });
+                            }
                         }
                         if let Some(element_key) = prev_key {
-                            self.events.push(ElemEvent {
-                                kind: ElemEvents::Selection {
-                                    state: SelectionStates::Leave,
-                                },
-                                element_key,
-                                msg: None,
-                            });
+                            let element = &mut self.elements[element_key.raw() as usize];
+                            if let Some(text) = element.styles_mut().text.get_mut() {
+                                if let Some(selection) = text.variant.selection_mut() {
+                                    *selection = None;
+                                }
+                            }
+                            for listener in &element.events.selection {
+                                self.events.push(ElemEvent {
+                                    kind: ElemEvents::Selection {
+                                        state: SelectionStates::Leave,
+                                    },
+                                    element_key,
+                                    msg: listener.msg.clone(),
+                                });
+                            }
                         }
                     }
                     SelectOpts::NoFocus => {
                         if let Some(element_key) = self.selection.current {
-                            self.events.push(ElemEvent {
-                                kind: ElemEvents::Selection {
-                                    state: SelectionStates::Leave,
-                                },
-                                element_key,
-                                msg: None,
-                            });
+                            let element = &mut self.elements[element_key.raw() as usize];
+                            if let Some(text) = element.styles_mut().text.get_mut() {
+                                if let Some(selection) = text.variant.selection_mut() {
+                                    *selection = None;
+                                }
+                            }
+                            for listener in &element.events.selection {
+                                self.events.push(ElemEvent {
+                                    kind: ElemEvents::Selection {
+                                        state: SelectionStates::Leave,
+                                    },
+                                    element_key,
+                                    msg: listener.msg.clone(),
+                                });
+                            }
                         }
                         self.selection.current = None;
                     }
                 }
                 return EnvEventStates::Consumed;
             }
+            EnvEvents::Copy => {
+                if let Some(key) = &self.selection.current {
+                    let elem = &self.elements[key.raw() as usize];
+                    if let Some(text) = elem.styles().text.get() {
+                        if let Some(Some(selection)) = text.variant.selection() {
+                            match text
+                                .text
+                                .clone_string_range(selection.sorted.0, selection.sorted.1)
+                            {
+                                Some(text) => {
+                                    self.events.push(ElemEvent {
+                                        kind: ElemEvents::TextCopy { text },
+                                        element_key: *key,
+                                        msg: None,
+                                    });
+                                }
+                                None => return EnvEventStates::Consumed,
+                            }
+                        }
+                    }
+                }
+            }
+            EnvEvents::Paste(txt) => todo!("pasting: {txt}"),
         }
 
         let mut state = EnvEventStates::Free;
@@ -494,7 +825,8 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                     if self
                         .cursor
                         .current
-                        .container_colision(&elem.instance.container).is_none()
+                        .container_colision(&elem.instance.container)
+                        .is_none()
                     {
                         return cache;
                     }
@@ -503,11 +835,13 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                     if self
                         .cursor
                         .current
-                        .container_colision(&elem.instance.container).is_none()
+                        .container_colision(&elem.instance.container)
+                        .is_none()
                         && self
-                        .cursor
-                        .last
-                        .container_colision(&elem.instance.container).is_none()
+                            .cursor
+                            .last
+                            .container_colision(&elem.instance.container)
+                            .is_none()
                     {
                         return cache;
                     }
@@ -516,12 +850,13 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                     if self
                         .cursor
                         .current
-                        .container_colision(&elem.instance.container).is_none()
+                        .container_colision(&elem.instance.container)
+                        .is_none()
                     {
                         return cache;
                     }
                 }
-                _ => ()
+                _ => (),
             }
         }
 
@@ -554,6 +889,38 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                     .container_colision_with_pos(&elem.instance.container);
                 cache.current_over |= col;
                 if cache.current_over {
+                    if *press {
+                        if let Some(text) = elem.styles.text.get() {
+                            if text.variant.selection().is_some() {
+                                self.env_event(EnvEvents::Select {
+                                    opt: SelectOpts::SelectKey { key, force: true },
+                                });
+                            }
+                        }
+                        let elem = &mut self.elements[key.0 as usize];
+                        if let Some(text) = elem.styles.text.get_mut() {
+                            if let Some(selection) = text.variant.selection_mut() {
+                                if let (true, pos) = self
+                                    .cursor
+                                    .current
+                                    .container_colision_with_pos(&elem.instance.container)
+                                {
+                                    let hit = text.text.hit(pos);
+                                    *selection = hit.map(|hit| TextSelection {
+                                        start: hit,
+                                        end: hit,
+                                        sorted: (hit, hit),
+                                    });
+                                    if let (Some(editor), Some(hit)) =
+                                        (text.variant.editor_mut(), hit)
+                                    {
+                                        editor.cursor.move_to_idx(hit, &text.text);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    let elem = &self.elements[key.0 as usize];
                     for listener in &elem.events.click {
                         listener_fit!(listener);
                         self.events.push(ElemEvent {
@@ -631,7 +998,11 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                         for listener in &elem.events.mouse_move {
                             listener_fit!(listener);
                             self.events.push(ElemEvent {
-                                kind: ElemEvents::CursorMove { pos, prev_pos },
+                                kind: ElemEvents::CursorMove {
+                                    pos,
+                                    prev_pos,
+                                    vp_pos: self.cursor.current,
+                                },
                                 element_key: key,
                                 msg: listener.msg.clone(),
                             });
@@ -639,7 +1010,19 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                         }
                     }
                     (true, false) => {
-                        for listener in &elem.events.hover {
+                        for listener in &elem.events.mouse_move {
+                            listener_fit!(listener);
+                            self.events.push(ElemEvent {
+                                kind: ElemEvents::CursorMove {
+                                    pos,
+                                    prev_pos,
+                                    vp_pos: self.cursor.current,
+                                },
+                                element_key: key,
+                                msg: listener.msg.clone(),
+                            });
+                        }
+                        for listener in &elem.events.mouse_enter {
                             listener_fit!(listener);
                             self.events.push(ElemEvent {
                                 kind: ElemEvents::CursorEnter { pos },
@@ -649,7 +1032,19 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                         }
                     }
                     (false, true) => {
-                        for listener in &elem.events.hover {
+                        for listener in &elem.events.mouse_move {
+                            listener_fit!(listener);
+                            self.events.push(ElemEvent {
+                                kind: ElemEvents::CursorMove {
+                                    pos,
+                                    prev_pos,
+                                    vp_pos: self.cursor.current,
+                                },
+                                element_key: key,
+                                msg: listener.msg.clone(),
+                            });
+                        }
+                        for listener in &elem.events.mouse_leave {
                             listener_fit!(listener);
                             self.events.push(ElemEvent {
                                 kind: ElemEvents::CursorLeave { prev_pos },
@@ -678,9 +1073,29 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
             }
             EnvEvents::Select { .. } => (),
             EnvEvents::Input { .. } => (),
+            EnvEvents::Copy => (),
+            EnvEvents::Paste(txt) => todo!("pasting: {txt}"),
         }
 
         cache
+    }
+
+    pub fn copy_selection_text(&self) -> Option<String> {
+        if let Some(key) = &self.selection.current {
+            let elem = &self.elements[key.raw() as usize];
+            if let Some(text) = elem.styles().text.get() {
+                if let Some(Some(selection)) = text.variant.selection() {
+                    text.text
+                        .clone_string_range(selection.sorted.0, selection.sorted.1)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
     }
 
     fn fix_event_state(state: &mut EnvEventStates, listener: &ListenerTypes) {
@@ -849,7 +1264,10 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
     }
 
     pub fn set_entry(&mut self, key: ElementKey) {
-        self.entry = Some(key)
+        self.entry = Some(key);
+        self.selection.current = None;
+        self.viewport.size_mut();
+        self.viewport.pos_mut();
     }
 
     pub fn get_entry(&mut self) -> Option<ElementKey> {
@@ -889,6 +1307,7 @@ impl EventCache {
 pub struct Cursor {
     pub current: Vector,
     pub last: Vector,
+    pub down: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -911,6 +1330,14 @@ impl Default for Selection {
 }
 
 impl Selection {
+    fn post_update(&mut self) {
+        /*if let Some(current) = self.current {
+            if !self.selectables.contains(&current) {
+                self.current = None;
+            }
+        }*/
+    }
+
     pub fn next(&mut self) -> Option<ElementKey> {
         self.current = match self.current {
             Some(current) => self
@@ -941,16 +1368,21 @@ impl Selection {
         self.selectables.clear();
     }
     pub fn select_element(&mut self, key: ElementKey) -> (Option<ElementKey>, Option<ElementKey>) {
-        let result = self.current;
+        let last = self.current;
         if self.selectables.contains(&key) {
             self.current = Some(key)
         } else {
             self.current = None
         }
-        (result, self.current)
+        (last, self.current)
     }
-    pub fn select_element_unchecked(&mut self, key: ElementKey) {
-        self.current = Some(key)
+    pub fn select_element_unchecked(
+        &mut self,
+        key: ElementKey,
+    ) -> (Option<ElementKey>, Option<ElementKey>) {
+        let last = self.current;
+        self.current = Some(key);
+        (last, self.current)
     }
     pub fn current(&self) -> &Option<ElementKey> {
         &self.current
@@ -964,7 +1396,10 @@ mod tests {
         time::{Duration, Instant},
     };
 
-    use crate::{Element, Gui, Vector};
+    use crate::{
+        text::{Font, TextRepr},
+        Element, Gui, Vector,
+    };
 
     #[test]
     pub fn benchmark() {
@@ -976,12 +1411,23 @@ mod tests {
 
         for _ in 0..ITERATIONS {
             let mut gui: Gui = Gui::new((NonZero::new(800).unwrap(), NonZero::new(800).unwrap()));
+            gui.text_ctx.add_font(
+                Font::from_bytes(
+                    include_bytes!("../examples/game/src/NotoSans-Medium.ttf"),
+                    0,
+                )
+                .unwrap(),
+            );
 
             let mut elem = Element::default();
 
             let mut children = Vec::new();
             for _ in 0..1000 {
-                let elem = Element::default();
+                let mut elem = Element::default();
+
+                elem.styles_mut()
+                    .text
+                    .set(Some(TextRepr::new_editor("Hi!")));
 
                 let elem_key = gui.add_element(elem);
                 children.push(elem_key);
@@ -1023,6 +1469,21 @@ mod tests {
         // nothing
         // init avg: 78.916µs
         // step avg: 15.219µs
+        //
+        // text update (no text)
+        // init avg: 88.713µs
+        // step avg: 30.584µs
+        // event avg: 9.68µs
+        //
+        // text update (1000x "Hi!")
+        // init avg: 2.165773ms
+        // step avg: 2.020739ms
+        // event avg: 12.228µs
+        //
+        // text update(1000x "Hi!") -- small fix for dirty checks
+        // init avg: 2.126643ms
+        // step avg: 35.213µs
+        // event avg: 10.135µs
 
         panic!("danda")
     }

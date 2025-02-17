@@ -19,7 +19,7 @@ impl Drawing {
     pub async fn new(window: Arc<winit::window::Window>) -> Self {
         let size = window.inner_size();
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             ..Default::default()
         });
 
@@ -48,11 +48,11 @@ impl Drawing {
             .unwrap();
 
         let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface.get_capabilities(&adapter).formats[0],
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            format: *surface.get_capabilities(&adapter).formats.first().unwrap(),
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::AutoVsync,
+            present_mode: wgpu::PresentMode::AutoNoVsync,
             desired_maximum_frame_latency: 1,
             alpha_mode: wgpu::CompositeAlphaMode::Opaque,
             view_formats: vec![],

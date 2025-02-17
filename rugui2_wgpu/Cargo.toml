@@ -4,11 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wgpu = {version = "23.0.1"}
+wgpu = {version = "24.0.0"}
 image = { version = "0.25.5", optional = true }
 bytemuck = { version = "1.20.0", features = ["derive"] }
 
 rugui2 = {path = "../" }
+swash = { version = "0.2.0", features = ["scale"] }
+etagere = "0.2.15"
 
 [features]
 default = ["image"]

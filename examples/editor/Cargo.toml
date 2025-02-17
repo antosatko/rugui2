@@ -1,0 +1,13 @@
+[package]
+name = "editor"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+wgpu = "24.0.0"
+winit = "0.30.5"
+rugui2 = { path = "../../" }
+rugui2_wgpu = { path = "../../rugui2_wgpu" }
+rugui2_winit = { path = "../../rugui2_winit", features = ["clipboard"] }
+pollster = "0.4.0"
+common = {path = "../common"}

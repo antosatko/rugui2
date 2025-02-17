@@ -2,7 +2,6 @@ use std::ops::{Add, Div, Mul, Rem, Sub};
 
 use crate::element::Container;
 
-
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
 #[repr(C)]
 pub struct Vector(pub f32, pub f32);
@@ -18,22 +17,34 @@ impl Vector {
         Self(x, y)
     }
 
+    pub fn abs(&self) -> Self {
+        Self(self.0.abs(), self.1.abs())
+    }
+
+    pub fn max(&self, v: f32) -> Self {
+        Self(self.0.max(v), self.1.max(v))
+    }
+
+    pub fn min(&self, v: f32) -> Self {
+        Self(self.0.min(v), self.1.min(v))
+    }
+
     /// Rotates the vector around a given point by a specified angle in radians.
     pub fn rotate_around_point(&self, point: &Self, angle: f32) -> Self {
         let (cx, cy) = (point.0, point.1);
         let (x, y) = (self.0, self.1);
-        
+
         let translated_x = x - cx;
         let translated_y = y - cy;
-        
+
         let cos_angle = angle.cos();
         let sin_angle = angle.sin();
         let rotated_x = translated_x * cos_angle - translated_y * sin_angle;
         let rotated_y = translated_x * sin_angle + translated_y * cos_angle;
-        
+
         let result_x = rotated_x + cx;
         let result_y = rotated_y + cy;
-        
+
         Self(result_x, result_y)
     }
 
@@ -43,13 +54,15 @@ impl Vector {
         let sin_angle = angle.sin();
         let rotated_x = x * cos_angle - y * sin_angle;
         let rotated_y = x * sin_angle + y * cos_angle;
-        
+
         Self(rotated_x, rotated_y)
     }
 
     pub fn container_colision(&self, c: &Container) -> Option<Vector> {
         if c.rotation == 0.0 {
-            return self.rectangle_colision(&c.pos, &c.size).then(|| *self - c.pos)
+            return self
+                .rectangle_colision(&c.pos, &c.size)
+                .then(|| *self - c.pos);
         }
 
         let rot = self.rotate_around_point(&c.pos, -c.rotation);
@@ -59,7 +72,7 @@ impl Vector {
 
     pub fn container_colision_with_pos(&self, c: &Container) -> (bool, Vector) {
         if c.rotation == 0.0 {
-            return (self.rectangle_colision(&c.pos, &c.size), *self - c.pos)
+            return (self.rectangle_colision(&c.pos, &c.size), *self - c.pos);
         }
 
         let rot = self.rotate_around_point(&c.pos, -c.rotation);
@@ -74,7 +87,7 @@ impl Vector {
 
     pub fn relative_pos(&self, pos: &Self, rot: f32) -> Self {
         if rot == 0.0 {
-            return *self - *pos
+            return *self - *pos;
         }
 
         self.rotate_around_point(pos, rot) - *pos
