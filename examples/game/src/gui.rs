@@ -1,10 +1,11 @@
 use std::mem::MaybeUninit;
+use std::rc::Rc;
 
 use colors::Colors;
 use element::{Element, ElementKey};
 use events::EventListener;
-use rugui2::Gui;
 use rugui2::*;
+use rugui2::{rich_text::TextStyles, Gui};
 use rugui2_wgpu::texture::Texture;
 use styles::{Container, Gradient, Image, Portion, Position, Value, Values};
 use text::{Font, FontIdx, TextRepr};
@@ -58,17 +59,59 @@ impl GuiManager {
         let mono = gui
             .text_ctx
             .add_font(Font::from_bytes(include_bytes!("SpaceMono-Regular.ttf"), 0).unwrap());
-        gui.text_ctx.add_font(Font::from_bytes(include_bytes!("NotoEmoji-Regular.ttf"), 0).unwrap());
-        let noto = gui.text_ctx.add_font(Font::from_bytes(include_bytes!("NotoSans-Medium.ttf"), 0).unwrap());
+        gui.text_ctx
+            .add_font(Font::from_bytes(include_bytes!("NotoEmoji-Regular.ttf"), 0).unwrap());
+        let noto = gui
+            .text_ctx
+            .add_font(Font::from_bytes(include_bytes!("NotoSans-Medium.ttf"), 0).unwrap());
         let widgets = WidgetManager::new(&gui, Msgs::Widgets);
         let menu = new(gui, |gui, container| {
-            container
+            /*container
                 .styles_mut()
                 .text
                 .set(Some(TextRepr::new_editor(include_str!(
                     "../../../rugui2_wgpu/src/shaders/glyph.wgsl"
-                ))));
-            container.events.add(EventListener::new(events::ElemEventTypes::TextInput));
+                ))));*/
+            let mut text = rugui2::rich_text::Text::new();
+            text.styles = Rc::new(TextStyles {
+                align: 0.0,
+                ..Default::default()
+            });
+            let mut section = rugui2::rich_text::TextSection::new("OH MY GAH! 😇 ");
+            section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
+                color: [1.0, 0.0, 0.0, 1.0],
+                ..Default::default()
+            });
+            text.sections.push(section);
+            section = rugui2::rich_text::TextSection::new("I wish I were a bird. 🐦");
+            section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
+                color: [0.0, 1.0, 0.0, 1.0],
+                font: noto,
+                font_size: 30.0,
+                italic: true,
+                ..Default::default()
+            });
+            text.sections.push(section);
+            section = rugui2::rich_text::TextSection::new("Why are you speaking in English? 🫖");
+            section.kind = rugui2::rich_text::SectionKinds::NewLine;
+            section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
+                color: [0.0, 0.0, 1.0, 1.0],
+                bold: true,
+                font_size: 10.0,
+                ..Default::default()
+            });
+            text.sections.push(section);
+            section = rugui2::rich_text::TextSection::new("My daughter is going to America. 🍔");
+            section.kind = rugui2::rich_text::SectionKinds::NewLine;
+            section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
+                color: [0.0, 1.0, 1.0, 1.0],
+                ..Default::default()
+            });
+            text.sections.push(section);
+            container.styles_mut().rich_text.set(Some(text));
+            container
+                .events
+                .add(EventListener::new(events::ElemEventTypes::TextInput));
             container.styles_mut().text_wrap.set(styles::TextWrap::Wrap);
             container.styles_mut().font_size.set(Value::Px(14.0));
             //container.styles_mut().text_align.set(styles::TextAlign::Center);
@@ -184,7 +227,7 @@ impl GuiManager {
                         styles.origin.set(Position {
                             container: Container::This,
                             width: Value::Value(Container::This, Values::Width, Portion::Half),
-                            height: Value::Value(Container::This, Values::Height, Portion::Zero)
+                            height: Value::Value(Container::This, Values::Height, Portion::Zero),
                         });
                         match i {
                             0 => {

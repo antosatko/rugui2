@@ -1,5 +1,5 @@
 use std::{
-    cell::RefCell, cmp::Ordering, ops::DerefMut, rc::Rc, sync::{Arc, Mutex, RwLock}
+    cmp::Ordering, rc::Rc, sync::{Arc, Mutex, RwLock}
 };
 
 use ropey::Rope;
@@ -52,6 +52,7 @@ pub struct SectionStyles {
     pub italic: bool,
 }
 
+#[derive(Debug, Clone)]
 pub struct Text {
     pub styles: Rc<TextStyles>,
     pub shape: ShapeStorages,
@@ -72,6 +73,7 @@ pub enum SectionKinds {
     NewParagraph,
 }
 
+#[derive(Debug, Clone)]
 pub enum ShapeStorages {
     External,
     Internal(TextShape),
@@ -79,13 +81,13 @@ pub enum ShapeStorages {
     ThreadSync(Arc<Mutex<TextShape>>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TextShape {
     pub lines: Vec<PhysicalLine>,
     pub bounds: Rect,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PhysicalLine {
     pub line_index: usize,
     pub bounds: Rect,
@@ -132,13 +134,13 @@ impl Text {
                 .last()
                 .unwrap_or(0);
             let lines_slice = &mut shape.lines[first_in_line..];
+            let total_width: f32 = lines_slice.iter().map(|l| l.bounds.width).sum();
+            let alignment = (-total_width + bounds.width) * styles.align;
             let max_height = lines_slice
                 .iter()
                 .map(|l| l.height)
                 .max_by(|l, r| if l > r {Ordering::Greater} else {Ordering::Less})
                 .unwrap_or(1.0);
-            let total_width: f32 = lines_slice.iter().map(|l| l.bounds.width).sum();
-            let alignment = (-total_width + bounds.width) * styles.align;
             for line_section in shape
                 .lines
                 .iter_mut()
@@ -150,7 +152,7 @@ impl Text {
             }
             max_height
         }
-        self.with_shape(shape, |shape, styles, sections| {
+        self.with_shape_mut(shape, |shape, styles, sections| {
             shape.bounds = bounds;
             let mut char_idx = 0;
             let mut line_index = 0;
@@ -256,7 +258,7 @@ impl Text {
         });
     }
 
-    fn with_shape(
+    pub fn with_shape_mut(
         &mut self,
         shape: Option<&mut TextShape>,
         cb: impl FnOnce(&mut TextShape, &TextStyles, &mut Vec<TextSection>),
@@ -272,6 +274,27 @@ impl Text {
                 },
                 ShapeStorages::ThreadSync(s) => match s.lock() {
                     Ok(mut s) => cb(&mut s, &self.styles, &mut self.sections),
+                    Err(_) => return,
+                },
+            },
+        };
+    }
+    pub fn with_shape(
+        &self,
+        shape: Option<&mut TextShape>,
+        cb: impl FnOnce(&TextShape, &TextStyles, &Vec<TextSection>),
+    ) {
+        match shape {
+            Some(s) => cb(s, &self.styles, &self.sections),
+            None => match &self.shape {
+                ShapeStorages::External => return,
+                ShapeStorages::Internal(s) => cb(s, &self.styles, &self.sections),
+                ShapeStorages::Shared(s) => match s.write() {
+                    Ok(s) => cb(&s, &self.styles, &self.sections),
+                    Err(_) => return,
+                },
+                ShapeStorages::ThreadSync(s) => match s.lock() {
+                    Ok(s) => cb(&s, &self.styles, &self.sections),
                     Err(_) => return,
                 },
             },

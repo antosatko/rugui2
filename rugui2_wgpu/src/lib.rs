@@ -716,7 +716,21 @@ impl Rugui2WGPU {
         let (buffer, idx) = self.get_buffer_idx(key.raw());
         self.instance_buffers[buffer].1[idx as usize] =
             WGPUElementInstance::from_instance(*elem_instance);
-        match e.styles().text.get() {
+        if let Some(text) = e.styles().rich_text.get() {
+            text.with_shape(None, |shape, _, _| {
+                let text_start = self.get_glyph_instance_index(self.glyph_instances as _);
+                self.rich_text_prepare(&gui.text_ctx, shape, device);
+                let text_end = self.get_glyph_instance_index(self.glyph_instances as _);
+
+                let pi_data = &mut self.instance_buffers[buffer].2[idx as usize];
+                pi_data.text = true;
+                pi_data.text_start = dbg!(text_start);
+                pi_data.text_end = dbg!(text_end);
+            });
+        } else {
+            self.instance_buffers[buffer].2[idx as usize].text = false;
+        }
+        /*match e.styles().text.get() {
             Some(text) => {
                 let mut w = 0.0;
                 let mut top_plus_height = 0.0;
@@ -829,7 +843,7 @@ impl Rugui2WGPU {
                 pi_data.text_end = text_end;
             }
             _ => self.instance_buffers[buffer].2[idx as usize].text = false,
-        }
+        } */
         if let Some(children) = e.children.clone() {
             for i in 0..children.len() {
                 self.prepare_element(children[i], gui, device);
@@ -847,7 +861,7 @@ impl Rugui2WGPU {
                 let font_idx = char.glyph_key.font_idx;
                 let font = ctx.get_font(font_idx);
                 let size = (char.glyph_key.font_size as f32).max(1.0);
-                
+
                 self.raster_glyph(
                     &font,
                     size,
@@ -917,10 +931,14 @@ impl Rugui2WGPU {
         }
     }
 
-    pub fn experimental_text_rendering(&mut self, ctx: &TextProccesor, text: &TextShape) {
-        let mut img = RgbaImage::new(text.bounds.width as u32, text.bounds.height as u32);
-
+    pub fn rich_text_prepare(
+        &mut self,
+        ctx: &TextProccesor,
+        text: &TextShape,
+        device: &wgpu::Device,
+    ) {
         for line in &text.lines {
+            self.resize_to_add_glyphs(line.chars.len(), device);
             let mut w = line.bounds.left;
 
             for glyph in &line.chars {
@@ -929,11 +947,31 @@ impl Rugui2WGPU {
                     Some(g) => g,
                     None => continue,
                 };
-                let offset = (GLYPH_ATLAS_SIDE * GLYPH_ATLAS_SIDE * layer as usize) as u32;
 
-                for x in 0..placement.width {
+                let glyph_instance = WGPUGlyphInstance {
+                    uvd: [
+                        allocation.rectangle.min.x as f32 / GLYPH_ATLAS_SIDE as f32,
+                        allocation.rectangle.min.y as f32 / GLYPH_ATLAS_SIDE as f32,
+                        layer as f32 / (GLYPH_ATLAS_DEPTH as f32 - 1.0),
+                    ],
+                    color: line.color,
+                    offset: [placement.left as f32, placement.top as f32],
+                    size: [placement.width as f32, placement.height as f32],
+                    position: [
+                        line.bounds.left + text.bounds.left + w,
+                        line.bounds.top + text.bounds.top + line.height,
+                    ],
+                };
+                let (buffer, idx) = self.get_glyph_instance_index(self.glyph_instances as _);
+                self.glyph_instance_buffers[buffer].1[idx as usize] = glyph_instance;
+
+                self.glyph_instances += 1;
+
+                /*for x in 0..placement.width {
                     for y in 0..placement.height {
-                        let atlas_i = (y + allocation.rectangle.min.y as u32) * GLYPH_ATLAS_SIDE as u32 + (x + offset + allocation.rectangle.min.x as u32);
+                        let atlas_i = (y + allocation.rectangle.min.y as u32)
+                            * GLYPH_ATLAS_SIDE as u32
+                            + (x + offset + allocation.rectangle.min.x as u32);
                         let alpha = self.glyph_atlas_img[atlas_i as usize];
                         if alpha == 0 {
                             continue;
@@ -941,7 +979,8 @@ impl Rugui2WGPU {
 
                         let (x, y) = (
                             (w.round() + x as f32).round() as i32 + placement.left,
-                            y as i32 - placement.top + (line.height + line.bounds.top).round() as i32,
+                            y as i32 - placement.top
+                                + (line.height + line.bounds.top).round() as i32,
                         );
                         if let Some(pixel) = img.get_pixel_mut_checked(x as u32, y as u32) {
                             let color = line
@@ -950,13 +989,11 @@ impl Rugui2WGPU {
                             pixel.0 = color;
                         }
                     }
-                }
+                }*/
 
                 w += glyph.width;
             }
         }
-        
-        img.save("texthere.png").expect("I mean..");
     }
 
     fn prepare_buffers(&mut self, elements: u64, device: &wgpu::Device) {
@@ -1065,7 +1102,16 @@ impl Rugui2WGPU {
                     .0
                     .slice(..),
             );
-            pass.draw(0..6, pi_data.text_start.1 as u32..pi_data.text_end.1 as u32);
+            println!("{:?}", pi_data.text_end.1 - pi_data.text_start.1);
+            /*println!(
+                "{:?}",
+                &self.glyph_instance_buffers[pi_data.text_start.0].1
+                    [pi_data.text_start.1 as usize..pi_data.text_end.1 as usize]
+            ); */
+            pass.draw(
+                0..6,
+                pi_data.text_start.1 as u32..pi_data.text_end.1 as u32,
+            );
 
             pass.set_pipeline(&self.pipeline);
             pass.set_vertex_buffer(0, self.instance_buffers[buffer].0.slice(..));
@@ -1119,7 +1165,10 @@ impl Rugui2WGPU {
             Source::Bitmap(StrikeWith::BestFit),
         ])
         .embolden(embolden)
-        .transform(Some(Transform::skew(Angle::from_degrees(skew), Angle::ZERO)))
+        .transform(Some(Transform::skew(
+            Angle::from_degrees(skew),
+            Angle::ZERO,
+        )))
         .format(Format::Alpha)
         .offset(offset)
         .render_into(&mut scaler, glyph_id, &mut self.scaler_image)

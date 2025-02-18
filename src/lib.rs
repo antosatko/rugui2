@@ -528,6 +528,15 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                     element.instance.scroll,
                 );
             }
+            if let Some(text) = styles.rich_text.fix_dirty_force_mut() {
+                let bounds = Rect::new(
+                    0.0,
+                    0.0,
+                    element_container_c.size.0,
+                    element_container_c.size.1,
+                );
+                text.procces(&mut self.text_ctx, None, bounds);
+            }
         }
         //          --- TEXT-PROCCESSING ---
         if !element.instance.scroll.is_zero() {

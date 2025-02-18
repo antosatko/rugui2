@@ -11,7 +11,7 @@ use rugui2_wgpu::{Rugui2WGPU, texture::Texture};
 use rugui2_winit::EventContext;
 
 use winit::{
-    application::ApplicationHandler, event_loop::EventLoop, platform::windows::WindowAttributesExtWindows, window::{CursorIcon, Window, WindowButtons}
+    application::ApplicationHandler, event_loop::EventLoop, window::{CursorIcon, Window, WindowButtons}
 };
 
 mod gui;

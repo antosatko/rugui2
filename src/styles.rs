@@ -1,9 +1,7 @@
 use std::fmt::Debug;
 
 use crate::{
-    text::{FontIdx, TextRepr, DEFAULT_FONT_SIZE},
-    variables::{VarKey, Variables},
-    Colors, Vector,
+    rich_text::Text, text::{FontIdx, TextRepr, DEFAULT_FONT_SIZE}, variables::{VarKey, Variables}, Colors, Vector
 };
 
 #[derive(Debug, Clone)]
@@ -70,6 +68,7 @@ pub struct Styles<Img: Clone + ImageData> {
     pub scroll_x: StyleComponent<Value>,
     /// Define how to render overflow
     pub overflow: StyleComponent<Overflow>,
+    pub rich_text: StyleComponent<Option<Text>>,
     pub text: StyleComponent<Option<TextRepr>>,
     pub font_size: StyleComponent<Value>,
     pub font: StyleComponent<FontIdx>,
@@ -115,6 +114,7 @@ pub enum Style {
     TextAlign,
     FitTextWidth,
     FitTextHeight,
+    RichText,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -420,6 +420,7 @@ impl<Tex: ImageData + Clone> Default for Styles<Tex> {
             text_align,
             fit_text_width: opt_val(None),
             fit_text_height: opt_val(None),
+            rich_text: StyleComponent::new(None)
         }
     }
 }
@@ -762,6 +763,9 @@ mod tests {
             Style::FitTextHeight => {
                 let _ = styles.fit_text_height;
             },
+            Style::RichText => {
+                let _ = styles.rich_text;
+            }
         }
 
         let Styles {
@@ -797,6 +801,7 @@ mod tests {
             text_align,
             fit_text_width,
             fit_text_height,
+            rich_text,
         } = styles;
         let _ = (width, Style::Width);
         let _ = (height, Style::Height);
@@ -830,5 +835,6 @@ mod tests {
         let _ = (text_align, Style::TextAlign);
         let _ = (fit_text_width, Style::FitTextWidth);
         let _ = (fit_text_height, Style::FitTextHeight);
+        let _ = (rich_text, Style::RichText);
     }
 }

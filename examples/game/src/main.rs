@@ -134,7 +134,7 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
 
             let mut text = rugui2::rich_text::Text::new();
             text.styles = Rc::new(TextStyles {
-                            align: 1.0,
+                            align: 0.5,
                             ..Default::default()
                         });
             let mut section = rugui2::rich_text::TextSection::new("OH MY GAH! 😇 ");
@@ -157,6 +157,7 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
             section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
                 color: [0.0, 0.0, 1.0, 1.0],
                 bold: true,
+                font_size: 10.0,
                 ..Default::default()
             });
             text.sections.push(section);
@@ -164,16 +165,12 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
             section.kind = rugui2::rich_text::SectionKinds::NewLine;
             section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
                 color: [0.0, 1.0, 1.0, 1.0],
-                font_size: 20.0,
                 ..Default::default()
             });
             text.sections.push(section);
 
             let mut shape = rugui2::rich_text::TextShape::default();
             text.procces(ctx, Some(&mut shape), rugui2::text::Rect::new(0.0, 0.0, 500.0, 500.0));
-            gui_renderer.experimental_text_rendering(ctx, &shape);
-
-            panic!("Dont worry bbe happy")
         }
 
         let drawing = Arc::new(Mutex::new(drawing));
@@ -236,7 +233,7 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
                     let start = std::time::Instant::now();
                     this.gui_renderer
                         .prepare(&mut this.gui, &drawing.queue, &drawing.device);
-                    //println!("prepare: {:?}", start.elapsed());
+                    println!("prepare: {:?}", start.elapsed());
                     let start = std::time::Instant::now();
                     drawing.draw(&mut this.gui, &mut this.gui_renderer);
                     //println!("drawing: {:?}", start.elapsed());
