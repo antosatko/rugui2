@@ -153,6 +153,7 @@ impl Text {
             max_height
         }
         self.with_shape_mut(shape, |shape, styles, sections| {
+            shape.lines = Vec::new();
             shape.bounds = bounds;
             let mut char_idx = 0;
             let mut line_index = 0;
@@ -252,6 +253,7 @@ impl Text {
                         }
                     }
                 }
+                phys_line.bounds.left /= 2.0;
                 shape.lines.push(phys_line);
             }
             endl(shape, styles, line_index, bounds);

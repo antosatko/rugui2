@@ -74,7 +74,7 @@ impl GuiManager {
                 ))));*/
             let mut text = rugui2::rich_text::Text::new();
             text.styles = Rc::new(TextStyles {
-                align: 0.0,
+                align: 0.25,
                 ..Default::default()
             });
             let mut section = rugui2::rich_text::TextSection::new("OH MY GAH! 😇 ");
@@ -89,6 +89,12 @@ impl GuiManager {
                 font: noto,
                 font_size: 30.0,
                 italic: true,
+                ..Default::default()
+            });
+            text.sections.push(section);
+            section = rugui2::rich_text::TextSection::new("Please stop you are not even making any sense");
+            section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
+                color: [1.0, 1.0, 0.0, 1.0],
                 ..Default::default()
             });
             text.sections.push(section);
