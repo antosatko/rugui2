@@ -1,4 +1,4 @@
-use std::{fmt::Debug, num::NonZero, path::PathBuf};
+use std::{fmt::Debug, num::NonZero, path::PathBuf, time::Instant};
 
 use colors::*;
 use element::{Container, *};
@@ -229,7 +229,8 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         time: f32,
         image: &Vector,
         transform_update: bool,
-    ) {
+    ) -> bool {
+        let mut rotated = false;
         let styles = &mut element.styles;
         let container_transforms = container.get();
 
@@ -241,18 +242,20 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                     .rotate_around_point(&container_transforms.pos, container_transforms.rotation);
                 element_container.set_pos(pos);
             };
+            if styles.rotation.is_dirty() || container.dirty_rotation() {
+                let containers = &Containers {
+                    container: container_transforms,
+                    vp,
+                    this: element_container.get(),
+                    image,
+                    time,
+                };
+                let rot = styles.rotation.get().calc(containers, variables);
+                rotated = element_container.get().rotation != rot;
+                element_container.set_rotation(rot);
+            }
         }
-        if styles.rotation.is_dirty() || container.dirty_rotation() {
-            let containers = &Containers {
-                container: container_transforms,
-                vp,
-                this: element_container.get(),
-                image,
-                time,
-            };
-            let rot = styles.rotation.get().calc(containers, variables);
-            element_container.set_rotation(rot);
-        }
+        rotated
     }
 
     fn update_element(
@@ -346,7 +349,7 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         //
         // ROTATION
         // - dependent on position
-        Self::rotation_prolog(
+        let rotated = Self::rotation_prolog(
             element,
             &mut element_container,
             container,
@@ -389,7 +392,7 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                 element.instance.shadow = size;
             }
         }
-        if transform_update || styles.grad_linear.is_dirty() {
+        if transform_update || styles.grad_linear.is_dirty() || rotated {
             if let Some(grad) = styles.grad_linear.fix_dirty_force() {
                 let p1 = grad.p1.0.calc_rot(containers, variables);
                 let p2 = grad.p2.0.calc_rot(containers, variables);
@@ -402,7 +405,7 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                 element.instance.remove_flag(Flags::LinearGradient);
             }
         }
-        if transform_update || styles.grad_radial.is_dirty() {
+        if transform_update || styles.grad_radial.is_dirty() || rotated {
             if let Some(grad) = styles.grad_radial.fix_dirty_force() {
                 let p1 = grad.p1.0.calc_rot(containers, variables);
                 let p2 = grad.p2.0.calc_rot(containers, variables);
@@ -537,6 +540,7 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                 );
                 text.procces(&mut self.text_ctx, None, bounds);
             }
+
         }
         //          --- TEXT-PROCCESSING ---
         if !element.instance.scroll.is_zero() {

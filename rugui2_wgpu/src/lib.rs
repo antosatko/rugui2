@@ -11,7 +11,7 @@ use texture::{DepthBuffer, Texture};
 use wgpu::{include_wgsl, PipelineLayoutDescriptor, RenderPipelineDescriptor, VertexAttribute};
 
 use rugui2::{
-    element::{ElementInstance, ElementKey, Flags},
+    element::{Container, ElementInstance, ElementKey, Flags},
     rich_text::{GlyphFlags, TextShape},
     text::{GlyphKey, Paragraph, PhysicalChar, TextProccesor},
 };
@@ -181,29 +181,35 @@ impl Rugui2WGPU {
                     shader_location: 0,
                     offset: 0,
                 },
-                // offset
+                // size
                 VertexAttribute {
                     format: wgpu::VertexFormat::Float32x2,
                     shader_location: 1,
                     offset: 8,
                 },
-                // size
-                VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x2,
-                    shader_location: 2,
-                    offset: 16,
-                },
                 // color
                 VertexAttribute {
                     format: wgpu::VertexFormat::Float32x4,
-                    shader_location: 3,
-                    offset: 24,
+                    shader_location: 2,
+                    offset: 16,
                 },
                 // uvd
                 VertexAttribute {
                     format: wgpu::VertexFormat::Float32x3,
+                    shader_location: 3,
+                    offset: 32,
+                },
+                // origin
+                VertexAttribute {
+                    format: wgpu::VertexFormat::Float32x2,
                     shader_location: 4,
-                    offset: 40,
+                    offset: 44,
+                },
+                // rotation
+                VertexAttribute {
+                    format: wgpu::VertexFormat::Float32,
+                    shader_location: 5,
+                    offset: 52,
                 },
             ],
             step_mode: wgpu::VertexStepMode::Instance,
@@ -711,21 +717,20 @@ impl Rugui2WGPU {
     ) {
         let e = gui.get_element_unchecked(key);
         let elem_instance = e.instance();
-        let cont = elem_instance.container.pos;
-        let color = elem_instance.font_color;
+        let cont = elem_instance.container;
         let (buffer, idx) = self.get_buffer_idx(key.raw());
         self.instance_buffers[buffer].1[idx as usize] =
             WGPUElementInstance::from_instance(*elem_instance);
         if let Some(text) = e.styles().rich_text.get() {
             text.with_shape(None, |shape, _, _| {
                 let text_start = self.get_glyph_instance_index(self.glyph_instances as _);
-                self.rich_text_prepare(&gui.text_ctx, shape, device);
+                self.rich_text_prepare(&gui.text_ctx, shape, &cont, device);
                 let text_end = self.get_glyph_instance_index(self.glyph_instances as _);
 
                 let pi_data = &mut self.instance_buffers[buffer].2[idx as usize];
                 pi_data.text = true;
-                pi_data.text_start = dbg!(text_start);
-                pi_data.text_end = dbg!(text_end);
+                pi_data.text_start = text_start;
+                pi_data.text_end = text_end;
             });
         } else {
             self.instance_buffers[buffer].2[idx as usize].text = false;
@@ -935,6 +940,7 @@ impl Rugui2WGPU {
         &mut self,
         ctx: &TextProccesor,
         text: &TextShape,
+        container: &Container,
         device: &wgpu::Device,
     ) {
         for line in &text.lines {
@@ -955,12 +961,13 @@ impl Rugui2WGPU {
                         layer as f32 / (GLYPH_ATLAS_DEPTH as f32 - 1.0),
                     ],
                     color: line.color,
-                    offset: [placement.left as f32, placement.top as f32],
                     size: [placement.width as f32, placement.height as f32],
                     position: [
-                        line.bounds.left + text.bounds.left + w,
-                        line.bounds.top + text.bounds.top + line.height,
+                        line.bounds.left + text.bounds.left + w + placement.left as f32 + container.pos.0 - container.size.0 / 2.0,
+                        line.bounds.top + text.bounds.top + line.height - placement.top as f32 + container.pos.1 - container.size.1 / 2.0,
                     ],
+                    origin: container.pos.into(),
+                    rotation: container.rotation,
                 };
                 let (buffer, idx) = self.get_glyph_instance_index(self.glyph_instances as _);
                 self.glyph_instance_buffers[buffer].1[idx as usize] = glyph_instance;
@@ -1102,12 +1109,6 @@ impl Rugui2WGPU {
                     .0
                     .slice(..),
             );
-            println!("{:?}", pi_data.text_end.1 - pi_data.text_start.1);
-            /*println!(
-                "{:?}",
-                &self.glyph_instance_buffers[pi_data.text_start.0].1
-                    [pi_data.text_start.1 as usize..pi_data.text_end.1 as usize]
-            ); */
             pass.draw(
                 0..6,
                 pi_data.text_start.1 as u32..pi_data.text_end.1 as u32,
@@ -1271,8 +1272,9 @@ struct PerElementData {
 #[repr(C)]
 struct WGPUGlyphInstance {
     pub position: [f32; 2],
-    pub offset: [f32; 2],
     pub size: [f32; 2],
     pub color: [f32; 4],
     pub uvd: [f32; 3],
+    pub origin: [f32; 2],
+    pub rotation: f32,
 }

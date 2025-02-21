@@ -4,6 +4,8 @@ use std::rc::Rc;
 use colors::Colors;
 use element::{Element, ElementKey};
 use events::EventListener;
+use rugui2::rich_text::{SectionStyles, Text, TextSection};
+use rugui2::styles::Rotation;
 use rugui2::*;
 use rugui2::{rich_text::TextStyles, Gui};
 use rugui2_wgpu::texture::Texture;
@@ -42,6 +44,7 @@ pub struct GuiManager {
     pub ingame_end: ElementKey,
     pub ingame_end_overlay: ElementKey,
     pub settings: ElementKey,
+    pub start_btn: ElementKey,
     pub noto_font: FontIdx,
     pub mono_font: FontIdx,
 }
@@ -65,13 +68,16 @@ impl GuiManager {
             .text_ctx
             .add_font(Font::from_bytes(include_bytes!("NotoSans-Medium.ttf"), 0).unwrap());
         let widgets = WidgetManager::new(&gui, Msgs::Widgets);
+        let mut start_btn = unsafe {
+            MaybeUninit::uninit().assume_init()
+        };
         let menu = new(gui, |gui, container| {
             /*container
-                .styles_mut()
-                .text
-                .set(Some(TextRepr::new_editor(include_str!(
-                    "../../../rugui2_wgpu/src/shaders/glyph.wgsl"
-                ))));*/
+            .styles_mut()
+            .text
+            .set(Some(TextRepr::new_editor(include_str!(
+                "../../../rugui2_wgpu/src/shaders/glyph.wgsl"
+            ))));*/
             let mut text = rugui2::rich_text::Text::new();
             text.styles = Rc::new(TextStyles {
                 align: 0.25,
@@ -92,7 +98,9 @@ impl GuiManager {
                 ..Default::default()
             });
             text.sections.push(section);
-            section = rugui2::rich_text::TextSection::new("Please stop you are not even making any sense");
+            section = rugui2::rich_text::TextSection::new(
+                "Please stop you are not even making any sense",
+            );
             section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
                 color: [1.0, 1.0, 0.0, 1.0],
                 ..Default::default()
@@ -150,6 +158,72 @@ impl GuiManager {
                                 0 => {
                                     styles.color.set(Colors::GREEN);
                                     styles.text.set(Some(text::TextRepr::new_label("Start!")));
+                                    let mut txt = Text::new();
+                                    let style = Rc::new(SectionStyles {
+                                        bold: true,
+                                        italic: true,
+                                        font_size: 50.0,
+                                        color: [0.0, 0.0, 0.0, 1.0],
+                                        ..Default::default()
+                                    });
+                                    let mut p = TextSection::new("H");
+                                    p.styles = style.clone();
+                                    txt.sections.push(p);
+                                    let style = Rc::new(SectionStyles {
+                                        bold: true,
+                                        italic: true,
+                                        font_size: 50.0,
+                                        color: [0.1, 0.0, 0.0, 1.0],
+                                        ..Default::default()
+                                    });
+                                    let mut p = TextSection::new("e");
+                                    p.styles = style.clone();
+                                    txt.sections.push(p);
+                                    let style = Rc::new(SectionStyles {
+                                        bold: true,
+                                        italic: true,
+                                        font_size: 50.0,
+                                        color: [0.2, 0.0, 0.0, 1.0],
+                                        ..Default::default()
+                                    });
+                                    let mut p = TextSection::new("l");
+                                    p.styles = style.clone();
+                                    txt.sections.push(p);
+                                    let style = Rc::new(SectionStyles {
+                                        bold: true,
+                                        italic: true,
+                                        font_size: 50.0,
+                                        color: [0.4, 0.0, 0.0, 1.0],
+                                        ..Default::default()
+                                    });
+                                    let mut p = TextSection::new("l");
+                                    p.styles = style.clone();
+                                    txt.sections.push(p);
+                                    let style = Rc::new(SectionStyles {
+                                        bold: true,
+                                        italic: true,
+                                        font_size: 50.0,
+                                        color: [0.6, 0.0, 0.0, 1.0],
+                                        ..Default::default()
+                                    });
+                                    let mut p = TextSection::new("o");
+                                    p.styles = style.clone();
+                                    txt.sections.push(p);
+                                    let style = Rc::new(SectionStyles {
+                                        bold: true,
+                                        italic: true,
+                                        font_size: 50.0,
+                                        color: [0.9, 0.0, 0.0, 1.0],
+                                        ..Default::default()
+                                    });
+                                    let mut p = TextSection::new("!");
+                                    p.styles = style;
+                                    txt.sections.push(p);
+                                    txt.styles = Rc::new(TextStyles {
+                                        align: 0.25,
+                                        ..Default::default()
+                                    });
+                                    styles.rich_text.set(Some(txt));
                                     styles.font_size.set(Value::Value(
                                         Container::This,
                                         Values::Height,
@@ -191,6 +265,7 @@ impl GuiManager {
                         gui,
                     ),
             );
+            start_btn = gui.get_element_unchecked(children[0]).children.as_ref().map(|c| c[0]).unwrap();
             container.children = Some(children)
         });
         let ingame = new(gui, |_, container| {
@@ -351,6 +426,7 @@ impl GuiManager {
             ingame_pause,
             ingame_end,
             ingame_end_overlay,
+            start_btn,
             settings,
             page: Pages::Menu,
             noto_font: noto,

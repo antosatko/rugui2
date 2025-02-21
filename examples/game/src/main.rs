@@ -1,5 +1,9 @@
 use std::{
-    num::NonZero, panic::catch_unwind, rc::Rc, sync::{atomic::AtomicBool, Arc}, time::Instant
+    num::NonZero,
+    panic::catch_unwind,
+    rc::Rc,
+    sync::{atomic::AtomicBool, Arc},
+    time::Instant,
 };
 
 use gui::{Actions, GuiManager, Pages};
@@ -126,7 +130,7 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
             dyn_imag.dimensions(),
             None,
         );
-        
+
         let gui_manager = GuiManager::new(&mut gui, drawing.game_tex.clone(), imag.unwrap());
 
         {
@@ -134,9 +138,9 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
 
             let mut text = rugui2::rich_text::Text::new();
             text.styles = Rc::new(TextStyles {
-                            align: 0.5,
-                            ..Default::default()
-                        });
+                align: 0.5,
+                ..Default::default()
+            });
             let mut section = rugui2::rich_text::TextSection::new("OH MY GAH! 😇 ");
             section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
                 color: [1.0, 0.0, 0.0, 1.0],
@@ -170,7 +174,11 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
             text.sections.push(section);
 
             let mut shape = rugui2::rich_text::TextShape::default();
-            text.procces(ctx, Some(&mut shape), rugui2::text::Rect::new(0.0, 0.0, 500.0, 500.0));
+            text.procces(
+                ctx,
+                Some(&mut shape),
+                rugui2::text::Rect::new(0.0, 0.0, 500.0, 500.0),
+            );
         }
 
         let drawing = Arc::new(Mutex::new(drawing));
@@ -226,7 +234,17 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
             }
             WindowEvent::RedrawRequested => {
                 let start = std::time::Instant::now();
-                this.gui.update(this.start_time.elapsed().as_secs_f32());
+                let elapsed = this.start_time.elapsed().as_secs_f32();
+                {
+                    let elem = this.gui.get_element_mut_unchecked(this.gui_manager.start_btn);
+                    let text = elem.styles_mut().rich_text.get_mut().as_mut().unwrap();
+                    for (i, s) in text.sections.iter_mut().enumerate() {
+                        let mut style = *s.styles;
+                        style.color[2] = (elapsed/2.0 + i as f32 / 6.0).sin().abs();
+                        s.styles = Rc::new(style)
+                    }
+                }
+                this.gui.update(elapsed);
                 println!("update: {:?}", start.elapsed());
                 this.rt.block_on(async {
                     let drawing = this.drawing.lock().await;
@@ -253,14 +271,21 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
                 while let Some(e) = this.gui.poll_event() {
                     match &e.msg {
                         Some(Msgs::Widgets(action)) => {
-                            for res in this.gui_manager.widgets.action(&action, &e, &mut this.gui, &mut ()).to_vec() {
+                            for res in this
+                                .gui_manager
+                                .widgets
+                                .action(&action, &e, &mut this.gui, &mut ())
+                                .to_vec()
+                            {
                                 match res {
                                     Actions::Button(name) => {
                                         this.window.set_cursor(CursorIcon::Default);
                                         match name {
                                             gui::ElementNames::Close => {
-                                                RUNNING
-                                                    .store(false, std::sync::atomic::Ordering::Relaxed);
+                                                RUNNING.store(
+                                                    false,
+                                                    std::sync::atomic::Ordering::Relaxed,
+                                                );
                                                 event_loop.exit();
                                             }
                                             gui::ElementNames::Orange => {
@@ -338,9 +363,14 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
                         None => match e.kind {
                             rugui2::events::ElemEvents::TextInput { text } => {
                                 let elem = this.gui.get_element_mut_unchecked(e.element_key);
-                                elem.styles_mut().text.get_mut().as_mut().unwrap().insert_str(&text);
+                                elem.styles_mut()
+                                    .text
+                                    .get_mut()
+                                    .as_mut()
+                                    .unwrap()
+                                    .insert_str(&text);
                             }
-                            kind => println!("event: {:?}", kind)
+                            kind => println!("event: {:?}", kind),
                         },
                     }
                 }
