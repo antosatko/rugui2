@@ -36,7 +36,7 @@ impl<Response: Clone> Responses<Response> {
     }
 }
 
-impl<'a, Msg: Clone, Img: ImageData + Clone, Data> EventArgs<'a, Msg, Img, Data> {
+impl<Msg: Clone, Img: ImageData + Clone, Data> EventArgs<'_, Msg, Img, Data> {
     pub fn element(&self) -> &Element<Msg, Img> {
         self.gui.get_element_unchecked(self.element_key)
     }
@@ -437,12 +437,14 @@ impl<Msg: Clone, Img: Clone + ImageData, Data, Response: Clone>
     }
 }
 
+pub type MsgEventsDefault<Msg, Img, Data, Response> = Option<fn(WidgetMsgs<Msg, Img, Data, Response>) -> Msg>;
+
 pub struct GridBuilder<Msg: Clone, Img: Clone + ImageData, Data, Response: Clone> {
     pub columns: u32,
     pub rows: u32,
     pub count: Option<u32>,
     pub scroll: Option<Scroll<Response>>,
-    pub events: Option<fn(WidgetMsgs<Msg, Img, Data, Response>) -> Msg>,
+    pub events: MsgEventsDefault<Msg, Img, Data, Response>,
     pub width_modifier: fn(Value) -> Value,
     pub height_modifier: fn(Value) -> Value,
 }
@@ -451,14 +453,14 @@ pub struct RowsBuilder<Msg: Clone, Img: Clone + ImageData, Data, Response: Clone
     pub rows: u32,
     pub count: Option<u32>,
     pub scroll: Option<Scroll<Response>>,
-    pub events: Option<fn(WidgetMsgs<Msg, Img, Data, Response>) -> Msg>,
+    pub events: MsgEventsDefault<Msg, Img, Data, Response>,
     pub height_modifier: fn(Value) -> Value,
 }
 pub struct ColumnsBuilder<Msg: Clone, Img: Clone + ImageData, Data, Response: Clone> {
     pub columns: u32,
     pub count: Option<u32>,
     pub scroll: Option<Scroll<Response>>,
-    pub events: Option<fn(WidgetMsgs<Msg, Img, Data, Response>) -> Msg>,
+    pub events: MsgEventsDefault<Msg, Img, Data, Response>,
     pub width_modifier: fn(Value) -> Value,
 }
 
@@ -542,8 +544,8 @@ impl<Msg: Clone, Img: Clone + ImageData, Data, Response: Clone>
         ) -> WidgetControlFlow,
         gui: &mut Gui<Msg, Img>,
     ) -> ElementKey {
-        let width_var = gui.variables.new(Variable::new_var());
-        let height_var = gui.variables.new(Variable::new_var());
+        let width_var = gui.variables.push(Variable::new_var());
+        let height_var = gui.variables.push(Variable::new_var());
 
         let mut container = Element::default();
         container.procedures.push(Value::SetVariable(
@@ -684,7 +686,7 @@ impl<Msg: Clone, Img: Clone + ImageData, Data, Response: Clone>
         mut for_each: impl FnMut(u32, &mut Element<Msg, Img>, &mut Gui<Msg, Img>) -> WidgetControlFlow,
         gui: &mut Gui<Msg, Img>,
     ) -> ElementKey {
-        let height_var = gui.variables.new(Variable::new_var());
+        let height_var = gui.variables.push(Variable::new_var());
 
         let mut container = Element::default();
         container.procedures.push(Value::SetVariable(
@@ -802,7 +804,7 @@ impl<Msg: Clone, Img: Clone + ImageData, Data, Response: Clone>
         mut for_each: impl FnMut(u32, &mut Element<Msg, Img>, &mut Gui<Msg, Img>) -> WidgetControlFlow,
         gui: &mut Gui<Msg, Img>,
     ) -> ElementKey {
-        let width_var = gui.variables.new(Variable::new_var());
+        let width_var = gui.variables.push(Variable::new_var());
 
         let mut container = Element::default();
         container.procedures.push(Value::SetVariable(

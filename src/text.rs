@@ -193,7 +193,7 @@ impl TextProccesor {
                     });
                 }
             }
-            if line.wraps.first().is_none() {
+            if line.wraps.is_empty() {
                 line.wraps.push(PhysicalWrap {
                     bb: Rect {
                         left: bounds.left + scroll.0,
@@ -377,8 +377,8 @@ impl Cursor {
 
     pub fn endl(&mut self, text: &PhysicalText) {
         let is_last = (self.line == text.text.len_lines() - 1)
-            .then(|| 0)
-            .unwrap_or_else(|| 1);
+            .then_some(0)
+            .unwrap_or(1);
         let bounds = text.line_bounds(self.line);
         self.idx = bounds.1 - is_last;
         self.column = bounds.1 - bounds.0 - is_last;
@@ -757,13 +757,10 @@ impl PhysicalText {
                     left += char.width;
                     char_idx += 1;
                 }
-                return match wrap.phys_chars.get(wrap.active_chars - 1) {
-                    Some(char) => Some(char.idx + 1),
-                    None => None, //Some(self.text.byte_to_char(char_idx)),
-                };
+                return wrap.phys_chars.get(wrap.active_chars - 1).map(|char| char.idx + 1)
             }
         }
-        return None;
+        None
     }
 
     pub fn get_char(&self, index: usize) -> Option<char> {

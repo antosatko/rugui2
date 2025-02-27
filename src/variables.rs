@@ -27,7 +27,7 @@ pub struct Variable {
 }
 
 impl Variables {
-    pub fn new(&mut self, variable: Variable) -> VarKey {
+    pub fn push(&mut self, variable: Variable) -> VarKey {
         let len = self.variables.len();
         self.variables.push(variable);
         VarKey(len as u64)
@@ -93,7 +93,7 @@ impl Variable {
     }
 
     pub fn get(&self) -> Option<f32> {
-        self.initialized.then(|| self.value)
+        self.initialized.then_some(self.value)
     }
 
     fn set(&mut self, v: f32) -> Result<f32, VarError> {

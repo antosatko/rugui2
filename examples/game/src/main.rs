@@ -137,40 +137,40 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
             let ctx = &mut gui.text_ctx;
 
             let mut text = rugui2::rich_text::Text::new();
-            text.styles = Rc::new(TextStyles {
+            text.styles = TextStyles {
                 align: 0.5,
                 ..Default::default()
-            });
+            };
             let mut section = rugui2::rich_text::TextSection::new("OH MY GAH! 😇 ");
-            section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
+            section.styles = rugui2::rich_text::SectionStyles {
                 color: [1.0, 0.0, 0.0, 1.0],
                 ..Default::default()
-            });
+            };
             text.sections.push(section);
             section = rugui2::rich_text::TextSection::new("I wish I were a bird. 🐦");
-            section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
+            section.styles = rugui2::rich_text::SectionStyles {
                 color: [0.0, 1.0, 0.0, 1.0],
                 font: gui_manager.noto_font,
                 font_size: 30.0,
                 italic: true,
                 ..Default::default()
-            });
+            };
             text.sections.push(section);
             section = rugui2::rich_text::TextSection::new("Why are you speaking in English? 🫖");
             section.kind = rugui2::rich_text::SectionKinds::NewLine;
-            section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
+            section.styles = rugui2::rich_text::SectionStyles {
                 color: [0.0, 0.0, 1.0, 1.0],
                 bold: true,
                 font_size: 10.0,
                 ..Default::default()
-            });
+            };
             text.sections.push(section);
             section = rugui2::rich_text::TextSection::new("My daughter is going to America. 🍔");
             section.kind = rugui2::rich_text::SectionKinds::NewLine;
-            section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
+            section.styles = rugui2::rich_text::SectionStyles {
                 color: [0.0, 1.0, 1.0, 1.0],
                 ..Default::default()
-            });
+            };
             text.sections.push(section);
 
             let mut shape = rugui2::rich_text::TextShape::default();
@@ -239,9 +239,8 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
                     let elem = this.gui.get_element_mut_unchecked(this.gui_manager.start_btn);
                     let text = elem.styles_mut().rich_text.get_mut().as_mut().unwrap();
                     for (i, s) in text.sections.iter_mut().enumerate() {
-                        let mut style = *s.styles;
-                        style.color[2] = (elapsed/2.0 + i as f32 / 6.0).sin().abs();
-                        s.styles = Rc::new(style)
+                        let style = &mut s.styles;
+                        style.color[2] = (elapsed/1.5 + i as f32 / 6.0).sin().abs();
                     }
                 }
                 this.gui.update(elapsed);

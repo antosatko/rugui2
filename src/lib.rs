@@ -553,8 +553,8 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         }
         // --- PREPARE-NEXT-ELEMENTS ---
 
-        assert!(styles.fit_text_width.get().is_none());
-        assert!(styles.fit_text_height.get().is_none());
+        assert!(styles.text_box_width.get().is_none());
+        assert!(styles.text_box_height.get().is_none());
 
         if let Some(children) = element.children.take() {
             for child in &children {

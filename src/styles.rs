@@ -1,7 +1,10 @@
 use std::fmt::Debug;
 
 use crate::{
-    rich_text::Text, text::{FontIdx, TextRepr, DEFAULT_FONT_SIZE}, variables::{VarKey, Variables}, Colors, Vector
+    rich_text::Text,
+    text::{FontIdx, TextRepr, DEFAULT_FONT_SIZE},
+    variables::{VarKey, Variables},
+    Colors, Vector,
 };
 
 #[derive(Debug, Clone)]
@@ -76,8 +79,8 @@ pub struct Styles<Img: Clone + ImageData> {
     pub line_height: StyleComponent<LineHeight>,
     pub font_color: StyleComponent<Colors>,
     pub text_align: StyleComponent<TextAlign>,
-    pub fit_text_width: StyleComponent<Option<Value>>,
-    pub fit_text_height: StyleComponent<Option<Value>>,
+    pub text_box_width: StyleComponent<Option<Value>>,
+    pub text_box_height: StyleComponent<Option<Value>>,
 }
 
 #[derive(Debug)]
@@ -112,8 +115,8 @@ pub enum Style {
     LineHeight,
     FontColor,
     TextAlign,
-    FitTextWidth,
-    FitTextHeight,
+    TextBoxWidth,
+    TextBoxHeight,
     RichText,
 }
 
@@ -138,7 +141,7 @@ pub enum Overflow {
     Hidden,
 }
 
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub enum TextAlign {
     #[default]
     Left,
@@ -183,7 +186,7 @@ pub struct Position {
     pub container: Container,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Portion {
     Full,
     Half,
@@ -418,9 +421,9 @@ impl<Tex: ImageData + Clone> Default for Styles<Tex> {
             text_wrap: text_wrap(TextWrap::Wrap),
             line_height: line_height(LineHeight::Auto),
             text_align,
-            fit_text_width: opt_val(None),
-            fit_text_height: opt_val(None),
-            rich_text: StyleComponent::new(None)
+            text_box_width: opt_val(None),
+            text_box_height: opt_val(None),
+            rich_text: StyleComponent::new(None),
         }
     }
 }
@@ -757,12 +760,12 @@ mod tests {
             Style::TextAlign => {
                 let _ = styles.text_align;
             }
-            Style::FitTextWidth => {
-                let _ = styles.fit_text_width;
-            },
-            Style::FitTextHeight => {
-                let _ = styles.fit_text_height;
-            },
+            Style::TextBoxWidth => {
+                let _ = styles.text_box_width;
+            }
+            Style::TextBoxHeight => {
+                let _ = styles.text_box_height;
+            }
             Style::RichText => {
                 let _ = styles.rich_text;
             }
@@ -799,8 +802,8 @@ mod tests {
             line_height,
             text_wrap,
             text_align,
-            fit_text_width,
-            fit_text_height,
+            text_box_width: fit_text_width,
+            text_box_height: fit_text_height,
             rich_text,
         } = styles;
         let _ = (width, Style::Width);
@@ -833,8 +836,8 @@ mod tests {
         let _ = (line_height, Style::LineHeight);
         let _ = (text_wrap, Style::TextWrap);
         let _ = (text_align, Style::TextAlign);
-        let _ = (fit_text_width, Style::FitTextWidth);
-        let _ = (fit_text_height, Style::FitTextHeight);
+        let _ = (fit_text_width, Style::TextBoxWidth);
+        let _ = (fit_text_height, Style::TextBoxHeight);
         let _ = (rich_text, Style::RichText);
     }
 }

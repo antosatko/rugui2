@@ -1,5 +1,7 @@
 use std::{
-    cmp::Ordering, rc::Rc, sync::{Arc, Mutex, RwLock}
+    cmp::Ordering,
+    rc::Rc,
+    sync::{Arc, Mutex, RwLock},
 };
 
 use ropey::Rope;
@@ -54,14 +56,14 @@ pub struct SectionStyles {
 
 #[derive(Debug, Clone)]
 pub struct Text {
-    pub styles: Rc<TextStyles>,
+    pub styles: TextStyles,
     pub shape: ShapeStorages,
     pub sections: Vec<TextSection>,
 }
 
 #[derive(Debug, Clone)]
 pub struct TextSection {
-    pub styles: Rc<SectionStyles>,
+    pub styles: SectionStyles,
     pub text: Rope,
     pub kind: SectionKinds,
 }
@@ -99,14 +101,14 @@ pub struct PhysicalLine {
 impl Text {
     pub fn from_str(text: &str) -> Self {
         Self {
-            styles: Rc::new(TextStyles::default()),
+            styles: TextStyles::default(),
             shape: ShapeStorages::Internal(TextShape::default()),
             sections: vec![TextSection::new(text)],
         }
     }
     pub fn new() -> Self {
         Self {
-            styles: Rc::new(TextStyles::default()),
+            styles: TextStyles::default(),
             shape: ShapeStorages::Internal(TextShape::default()),
             sections: Vec::new(),
         }
@@ -139,7 +141,13 @@ impl Text {
             let max_height = lines_slice
                 .iter()
                 .map(|l| l.height)
-                .max_by(|l, r| if l > r {Ordering::Greater} else {Ordering::Less})
+                .max_by(|l, r| {
+                    if l > r {
+                        Ordering::Greater
+                    } else {
+                        Ordering::Less
+                    }
+                })
                 .unwrap_or(1.0);
             for line_section in shape
                 .lines
@@ -268,15 +276,15 @@ impl Text {
         match shape {
             Some(s) => cb(s, &self.styles, &mut self.sections),
             None => match &mut self.shape {
-                ShapeStorages::External => return,
+                ShapeStorages::External => (),
                 ShapeStorages::Internal(s) => cb(s, &self.styles, &mut self.sections),
                 ShapeStorages::Shared(s) => match s.write() {
                     Ok(mut s) => cb(&mut s, &self.styles, &mut self.sections),
-                    Err(_) => return,
+                    Err(_) => (),
                 },
                 ShapeStorages::ThreadSync(s) => match s.lock() {
                     Ok(mut s) => cb(&mut s, &self.styles, &mut self.sections),
-                    Err(_) => return,
+                    Err(_) => (),
                 },
             },
         };
@@ -342,7 +350,7 @@ impl Default for TextShape {
 impl TextSection {
     pub fn new(text: &str) -> Self {
         Self {
-            styles: Rc::new(SectionStyles::default()),
+            styles: SectionStyles::default(),
             text: Rope::from_str(text),
             kind: SectionKinds::Section,
         }

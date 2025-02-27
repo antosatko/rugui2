@@ -79,48 +79,48 @@ impl GuiManager {
                 "../../../rugui2_wgpu/src/shaders/glyph.wgsl"
             ))));*/
             let mut text = rugui2::rich_text::Text::new();
-            text.styles = Rc::new(TextStyles {
+            text.styles = TextStyles {
                 align: 0.25,
                 ..Default::default()
-            });
+            };
             let mut section = rugui2::rich_text::TextSection::new("OH MY GAH! 😇 ");
-            section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
+            section.styles = rugui2::rich_text::SectionStyles {
                 color: [1.0, 0.0, 0.0, 1.0],
                 ..Default::default()
-            });
+            };
             text.sections.push(section);
             section = rugui2::rich_text::TextSection::new("I wish I were a bird. 🐦");
-            section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
+            section.styles = rugui2::rich_text::SectionStyles {
                 color: [0.0, 1.0, 0.0, 1.0],
                 font: noto,
                 font_size: 30.0,
                 italic: true,
                 ..Default::default()
-            });
+            };
             text.sections.push(section);
             section = rugui2::rich_text::TextSection::new(
                 "Please stop you are not even making any sense",
             );
-            section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
+            section.styles = rugui2::rich_text::SectionStyles {
                 color: [1.0, 1.0, 0.0, 1.0],
                 ..Default::default()
-            });
+            };
             text.sections.push(section);
             section = rugui2::rich_text::TextSection::new("Why are you speaking in English? 🫖");
             section.kind = rugui2::rich_text::SectionKinds::NewLine;
-            section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
+            section.styles = rugui2::rich_text::SectionStyles {
                 color: [0.0, 0.0, 1.0, 1.0],
                 bold: true,
                 font_size: 10.0,
                 ..Default::default()
-            });
+            };
             text.sections.push(section);
             section = rugui2::rich_text::TextSection::new("My daughter is going to America. 🍔");
             section.kind = rugui2::rich_text::SectionKinds::NewLine;
-            section.styles = std::rc::Rc::new(rugui2::rich_text::SectionStyles {
+            section.styles = rugui2::rich_text::SectionStyles {
                 color: [0.0, 1.0, 1.0, 1.0],
                 ..Default::default()
-            });
+            };
             text.sections.push(section);
             container.styles_mut().rich_text.set(Some(text));
             container
@@ -156,73 +156,73 @@ impl GuiManager {
                             let styles = e.styles_mut();
                             match i {
                                 0 => {
-                                    styles.color.set(Colors::GREEN);
+                                    styles.color.set(Colors::WHITE.with_alpha(0.1));
                                     styles.text.set(Some(text::TextRepr::new_label("Start!")));
                                     let mut txt = Text::new();
-                                    let style = Rc::new(SectionStyles {
+                                    let style = SectionStyles {
                                         bold: true,
                                         italic: true,
                                         font_size: 50.0,
                                         color: [0.0, 0.0, 0.0, 1.0],
                                         ..Default::default()
-                                    });
+                                    };
                                     let mut p = TextSection::new("H");
-                                    p.styles = style.clone();
+                                    p.styles = style;
                                     txt.sections.push(p);
-                                    let style = Rc::new(SectionStyles {
+                                    let style = SectionStyles {
                                         bold: true,
                                         italic: true,
                                         font_size: 50.0,
                                         color: [0.1, 0.0, 0.0, 1.0],
                                         ..Default::default()
-                                    });
+                                    };
                                     let mut p = TextSection::new("e");
-                                    p.styles = style.clone();
+                                    p.styles = style;
                                     txt.sections.push(p);
-                                    let style = Rc::new(SectionStyles {
+                                    let style = SectionStyles {
                                         bold: true,
                                         italic: true,
                                         font_size: 50.0,
                                         color: [0.2, 0.0, 0.0, 1.0],
                                         ..Default::default()
-                                    });
+                                    };
                                     let mut p = TextSection::new("l");
-                                    p.styles = style.clone();
+                                    p.styles = style;
                                     txt.sections.push(p);
-                                    let style = Rc::new(SectionStyles {
+                                    let style = SectionStyles {
                                         bold: true,
                                         italic: true,
                                         font_size: 50.0,
                                         color: [0.4, 0.0, 0.0, 1.0],
                                         ..Default::default()
-                                    });
+                                    };
                                     let mut p = TextSection::new("l");
-                                    p.styles = style.clone();
+                                    p.styles = style;
                                     txt.sections.push(p);
-                                    let style = Rc::new(SectionStyles {
+                                    let style = SectionStyles {
                                         bold: true,
                                         italic: true,
                                         font_size: 50.0,
                                         color: [0.6, 0.0, 0.0, 1.0],
                                         ..Default::default()
-                                    });
+                                    };
                                     let mut p = TextSection::new("o");
-                                    p.styles = style.clone();
+                                    p.styles = style;
                                     txt.sections.push(p);
-                                    let style = Rc::new(SectionStyles {
+                                    let style = SectionStyles {
                                         bold: true,
                                         italic: true,
                                         font_size: 50.0,
                                         color: [0.9, 0.0, 0.0, 1.0],
                                         ..Default::default()
-                                    });
+                                    };
                                     let mut p = TextSection::new("!");
                                     p.styles = style;
                                     txt.sections.push(p);
-                                    txt.styles = Rc::new(TextStyles {
+                                    txt.styles = TextStyles {
                                         align: 0.25,
                                         ..Default::default()
-                                    });
+                                    };
                                     styles.rich_text.set(Some(txt));
                                     styles.font_size.set(Value::Value(
                                         Container::This,
@@ -235,7 +235,7 @@ impl GuiManager {
                                     });
                                 }
                                 1 => {
-                                    styles.color.set(Colors::ORANGE);
+                                    styles.color.set(Colors::WHITE.with_alpha(0.1));
                                     styles.font_size.set(Value::Value(
                                         Container::This,
                                         Values::Height,
@@ -247,7 +247,7 @@ impl GuiManager {
                                     });
                                 }
                                 _ => {
-                                    styles.color.set(Colors::RED);
+                                    styles.color.set(Colors::WHITE.with_alpha(0.1));
                                     styles.font_size.set(Value::Value(
                                         Container::This,
                                         Values::Height,
