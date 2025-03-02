@@ -2,8 +2,7 @@ use std::{collections::HashMap, num::NonZero, sync::Arc, time::Instant};
 
 use common::{
     resize_event,
-    rugui2_wgpu::{texture::Texture, Rugui2WGPU},
-    rugui2_winit, Drawing,
+    rugui2_wgpu::{texture::Texture, Rugui2WGPU}, Drawing,
 };
 use rugui2::{
     colors::Colors,
@@ -172,7 +171,7 @@ impl ApplicationHandler for App {
                     SelectionStates::Confirm => println!("yaaaay"),
                     SelectionStates::Enter => {
                         if let Some(txt) = this.text_fields.get(&e.element_key) {
-                            this.window.set_title(&txt);
+                            this.window.set_title(txt);
                         }
                         // println!("selected: {}", e.element_key.raw());
                         let e = this.gui.get_element_mut(e.element_key).unwrap();
@@ -185,12 +184,9 @@ impl ApplicationHandler for App {
                         e.styles_mut().color.set(Colors::TRANSPARENT);
                     }
                 },
-                ElemEvents::TextInput { text } => match this.text_fields.get_mut(&e.element_key) {
-                    Some(txt) => {
-                        txt.push_str(&text);
-                        this.window.set_title(&txt);
-                    }
-                    None => (),
+                ElemEvents::TextInput { text } => if let Some(txt) = this.text_fields.get_mut(&e.element_key) {
+                    txt.push_str(&text);
+                    this.window.set_title(txt);
                 },
                 ElemEvents::Click { press: true, .. } => {
                     this.gui.env_event(rugui2::events::EnvEvents::Select {

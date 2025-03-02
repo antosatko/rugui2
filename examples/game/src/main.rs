@@ -1,14 +1,13 @@
 use std::{
     num::NonZero,
     panic::catch_unwind,
-    rc::Rc,
     sync::{atomic::AtomicBool, Arc},
     time::Instant,
 };
 
 use gui::{Actions, GuiManager, Pages};
 use image::{EncodableLayout, GenericImageView};
-use rugui2::{colors::Colors, events::Key, rich_text::TextStylesInstance, styles::Value, widgets::WidgetMsgs, Gui};
+use rugui2::{colors::Colors, events::Key, widgets::WidgetMsgs, Gui};
 use rugui2_wgpu::{texture::Texture, Rugui2WGPU};
 use rugui2_winit::EventContext;
 use tokio::sync::{
@@ -120,7 +119,7 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
             (PhysicalKey::Code(KeyCode::ArrowUp), Control::RightUp),
         ])));
         let drawing = rt.block_on(Drawing::new(window.clone()));
-        let mut gui_renderer = Rugui2WGPU::new(&drawing.queue, &drawing.device, size.into());
+        let gui_renderer = Rugui2WGPU::new(&drawing.queue, &drawing.device, size.into());
 
         let dyn_imag = image::load_from_memory(include_bytes!("image.png")).unwrap();
         let imag = Texture::from_bytes(

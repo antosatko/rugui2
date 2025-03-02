@@ -1,12 +1,12 @@
-use std::{fmt::Debug, num::NonZero, path::PathBuf, time::Instant};
+use std::{fmt::Debug, num::NonZero, path::PathBuf};
 
 use colors::*;
 use element::{Container, *};
 use events::*;
 use math::*;
 use styles::*;
-use text::{FontIdx, Paragraph, Rect, TextProccesor, TextRepr, TextSelection};
-use variables::{VarKey, Variables};
+use text::{FontIdx, Rect, TextProccesor, TextSelection};
+use variables::Variables;
 
 pub mod colors;
 pub mod element;
@@ -292,18 +292,6 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         }
         let image = &element.instance.image_size.into();
         // --- CONTENT-CONTAINERS ---
-
-        macro_rules! make_containers {
-            () => {
-                &Containers {
-                    container: container_transforms,
-                    vp,
-                    this: element_container.get(),
-                    image,
-                    time,
-                }
-            };
-        }
 
         let containers = &Containers {
             container: container_transforms,
@@ -1483,7 +1471,7 @@ mod tests {
 
         println!("-----------------");
         println!("BENCHMARK END");
-        println!("");
+        println!();
         println!("init avg: {:?}", init_total / ITERATIONS);
         println!("step avg: {:?}", step_total / ITERATIONS);
         println!("event avg: {:?}", event_total / ITERATIONS);

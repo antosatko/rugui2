@@ -374,9 +374,8 @@ impl<Msg: Clone, Img: Clone + ImageData, Data, Response: Clone>
                 beam,
             } => match event.kind {
                 ElemEvents::CursorMove {
-                    pos,
-                    prev_pos,
                     vp_pos,
+                    ..
                 } => {
                     if gui.selection.current != Some(*beam) {
                         return;

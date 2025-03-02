@@ -2,14 +2,13 @@ use std::{num::NonZero, sync::Arc, time::Instant};
 
 use common::{
     resize_event,
-    rugui2_wgpu::{texture::Texture, Rugui2WGPU},
-    rugui2_winit, Drawing,
+    rugui2_wgpu::{texture::Texture, Rugui2WGPU}, Drawing,
 };
 use rugui2::{
     colors::Colors,
     element::{Element, ElementKey},
     events::{ElemEventTypes, EventListener},
-    styles::{Container, Gradient, Overflow, Portion, Position, Rotation, Value, Values},
+    styles::{Container, Overflow, Portion, Rotation, Value, Values},
     Gui,
 };
 use tokio::runtime::Runtime;
@@ -149,11 +148,8 @@ impl ApplicationHandler for App {
                 }*/
                 rugui2::events::ElemEvents::Scroll { delta, pos: _ } => {
                     let elem = this.gui.get_element_mut(e.element_key).unwrap();
-                    match elem.styles_mut().scroll_y.get_mut() {
-                        Value::Px(px) => {
-                            *px += delta.1 * 65.0;
-                        }
-                        _ => (),
+                    if let Value::Px(px) = elem.styles_mut().scroll_y.get_mut() {
+                        *px += delta.1 * 65.0;
                     }
                 }
                 _ => (),

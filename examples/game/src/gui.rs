@@ -1,13 +1,11 @@
 use std::mem::MaybeUninit;
-use std::rc::Rc;
 
 use colors::Colors;
 use element::{Element, ElementKey};
 use events::EventListener;
-use rugui2::rich_text::{SectionStylesInstance, Text, TextSection, TextStyles};
-use rugui2::styles::{Rotation, StyleComponent};
+use rugui2::rich_text::{Text, TextSection};
 use rugui2::*;
-use rugui2::{rich_text::TextStylesInstance, Gui};
+use rugui2::Gui;
 use rugui2_wgpu::texture::Texture;
 use styles::{Container, Gradient, Image, Portion, Position, Value, Values};
 use text::{Font, FontIdx, TextRepr};
@@ -160,78 +158,36 @@ impl GuiManager {
                                     styles.text.set(Some(text::TextRepr::new_label("Start!")));
                                     let mut txt = Text::new();
                                     txt.styles.align.set(styles::TextAlign::Center);
-                                    let style = SectionStylesInstance {
-                                        bold: true,
-                                        italic: true,
-                                        font_size: 50.0,
-                                        color: [0.0, 0.0, 0.0, 1.0],
-                                        ..Default::default()
-                                    };
                                     let mut p = TextSection::new("H");
                                     p.styles.bold.set(true);
                                     p.styles.italic.set(true);
                                     p.styles.font_size.set(Value::Value(Container::This, Values::Height, Portion::Mul(0.95)));
                                     p.styles.color.set([0.0, 0.0, 0.0, 1.0].into());
                                     txt.sections.push(p);
-                                    let style = SectionStylesInstance {
-                                        bold: true,
-                                        italic: true,
-                                        font_size: 50.0,
-                                        color: [0.1, 0.0, 0.0, 1.0],
-                                        ..Default::default()
-                                    };
                                     let mut p = TextSection::new("e");
                                     p.styles.bold.set(true);
                                     p.styles.italic.set(true);
                                     p.styles.font_size.set(Value::Value(Container::This, Values::Height, Portion::Mul(0.95)));
                                     p.styles.color.set([0.1, 0.0, 0.0, 1.0].into());
                                     txt.sections.push(p);
-                                    let style = SectionStylesInstance {
-                                        bold: true,
-                                        italic: true,
-                                        font_size: 50.0,
-                                        color: [0.2, 0.0, 0.0, 1.0],
-                                        ..Default::default()
-                                    };
                                     let mut p = TextSection::new("l");
                                     p.styles.bold.set(true);
                                     p.styles.italic.set(true);
                                     p.styles.font_size.set(Value::Value(Container::This, Values::Height, Portion::Mul(0.95)));
                                     p.styles.color.set([0.2, 0.0, 0.0, 1.0].into());
                                     txt.sections.push(p);
-                                    let style = SectionStylesInstance {
-                                        bold: true,
-                                        italic: true,
-                                        font_size: 50.0,
-                                        color: [0.4, 0.0, 0.0, 1.0],
-                                        ..Default::default()
-                                    };
                                     let mut p = TextSection::new("l");
                                     p.styles.bold.set(true);
                                     p.styles.italic.set(true);
                                     p.styles.font_size.set(Value::Value(Container::This, Values::Height, Portion::Mul(0.95)));
                                     p.styles.color.set([0.4, 0.0, 0.0, 1.0].into());
                                     txt.sections.push(p);
-                                    let style = SectionStylesInstance {
-                                        bold: true,
-                                        italic: true,
-                                        font_size: 50.0,
-                                        color: [0.6, 0.0, 0.0, 1.0],
-                                        ..Default::default()
-                                    };
                                     let mut p = TextSection::new("o");
                                     p.styles.bold.set(true);
                                     p.styles.italic.set(true);
                                     p.styles.font_size.set(Value::Value(Container::This, Values::Height, Portion::Mul(0.95)));
                                     p.styles.color.set([0.6, 0.0, 0.0, 1.0].into());
                                     txt.sections.push(p);
-                                    let style = SectionStylesInstance {
-                                        bold: true,
-                                        italic: true,
-                                        font_size: 50.0,
-                                        color: [0.9, 0.0, 0.0, 1.0],
-                                        ..Default::default()
-                                    };
                                     let mut p = TextSection::new("!");
                                     p.styles.bold.set(true);
                                     p.styles.italic.set(true);

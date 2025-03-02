@@ -75,7 +75,7 @@ impl TextProccesor {
         scroll: crate::Vector,
     ) {
         text.active_lines = 0;
-        let mut char_idx = 0;
+        let mut char_idx;
         let line_height = font_size;
         let mut lines_count = 0;
         for (i, (line, line_slice)) in text.lines.iter_mut().zip(text.text.lines()).enumerate() {
@@ -141,7 +141,6 @@ impl TextProccesor {
                     shaper.add_cluster(&self.cluster);
 
                     shaper.shape_with(|cluster| {
-                        let src = cluster.source;
                         for glyph in cluster.glyphs {
                             let wrap = &mut line.wraps[line.active_wraps];
                             let glyph_key = GlyphKey {
@@ -465,12 +464,8 @@ impl TextRepr {
         }
     }
 
-    fn line_bounds(&self, line: usize) -> (usize, usize) {
-        self.text.line_bounds(line)
-    }
-
     pub fn move_cursor(&mut self, cmd: MoveCommand) -> EnvEventStates {
-        let (selection, editor) = match &self.variant {
+        let (_, editor) = match &self.variant {
             TextVariants::Editor { selection, editor } => (selection, editor),
             TextVariants::Paragraph { .. } => return EnvEventStates::Free,
             TextVariants::Label => return EnvEventStates::Free,
@@ -752,9 +747,6 @@ impl PhysicalText {
             return None;
         }*/
         for line in self.lines.iter().take(self.active_lines) {
-            // incase we hit an empty wrap, there will be counter for char idx
-            // I do not recommend using it unless necesarry
-            let mut char_idx = line.start;
             for wrap in line.wraps.iter().take(line.active_wraps) {
                 if !wrap.bb.hit_line(point) {
                     continue;
@@ -770,7 +762,6 @@ impl PhysicalText {
                         return Some(point);
                     }
                     left += char.width;
-                    char_idx += 1;
                 }
                 return wrap.phys_chars.get(wrap.active_chars - 1).map(|char| char.idx + 1)
             }

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, mem::size_of, num::NonZero};
 
 use etagere::{euclid::Size2D, Allocation, BucketedAtlasAllocator, Size};
-use image::{DynamicImage, RgbaImage};
+use image::DynamicImage;
 use swash::{
     scale::{image::Image, Render, ScaleContext, Source, StrikeWith},
     zeno::{Angle, Placement, Transform},
@@ -13,7 +13,7 @@ use wgpu::{include_wgsl, PipelineLayoutDescriptor, RenderPipelineDescriptor, Ver
 use rugui2::{
     element::{Container, ElementInstance, ElementKey, Flags},
     rich_text::{GlyphFlags, TextShape},
-    text::{GlyphKey, Paragraph, PhysicalChar, TextProccesor},
+    text::{GlyphKey, PhysicalChar, TextProccesor},
 };
 
 pub mod texture;
@@ -926,7 +926,6 @@ impl Rugui2WGPU {
 
                             img.save("atlas.png").unwrap();
                             panic!("insufficent glyph atlas. For the love of god just fix it already pls\nGlyph atlas dumped into 'atlas.png'");
-                            return None;
                         }
                     }
                 }

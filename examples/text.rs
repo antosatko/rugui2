@@ -1,12 +1,12 @@
-use std::{fs::File, io::Read, num::NonZero, sync::Arc, time::Instant};
+use std::{fs::File, io::Read, num::NonZero, sync::Arc};
 
 use common::{
     resize_event,
     rugui2_wgpu::{texture::Texture, Rugui2WGPU},
-    rugui2_winit::{self, EventContext}, Drawing,
+    rugui2_winit::EventContext, Drawing,
 };
 use rugui2::{
-    colors::Colors, element::{Element, ElementKey}, events::{self, ElemEventTypes, EventListener, Key}, styles::{self, Container, Gradient, Overflow, Portion, Position, Rotation, Value, Values}, text::{Font, TextRepr}, widgets::{WidgetManager, WidgetMsgs}, Gui
+    element::{Element, ElementKey}, events::{self, ElemEventTypes, EventListener, Key}, styles::{self, Value}, text::{Font, TextRepr}, widgets::{WidgetManager, WidgetMsgs}, Gui
 };
 use tokio::runtime::Runtime;
 use winit::{
@@ -110,16 +110,14 @@ impl ApplicationHandler for App {
                     let elem = this.gui.get_element_mut_unchecked(e.element_key);
                     elem.styles_mut().text.get_mut().as_mut().unwrap().insert_str(&text);
                 }
-                rugui2::events::ElemEvents::Scroll { delta, pos } => {
+                rugui2::events::ElemEvents::Scroll { delta, pos: _ } => {
                     let elem = this.gui.get_element_mut_unchecked(e.element_key);
                     if this.events.pressed_ctrl {
                         if let Value::Px(px) = elem.styles_mut().font_size.get_mut() {
                             *px = (*px + 1.0 * delta.1).max(1.0);
                         }
-                    }else {
-                        if let Value::Px(px) = elem.styles_mut().scroll_y.get_mut() {
-                            *px = (*px + 65.0 * delta.1).min(0.0);
-                        }
+                    }else if let Value::Px(px) = elem.styles_mut().scroll_y.get_mut() {
+                        *px = (*px + 65.0 * delta.1).min(0.0);
                     }
                 }
                 events::ElemEvents::KeyPress { press: true, key } => {
@@ -137,15 +135,12 @@ impl ApplicationHandler for App {
                         _=> ()
                     }
                 }
-                events::ElemEvents::FileDrop { path, pos } => {
+                events::ElemEvents::FileDrop { path, pos: _ } => {
                     let elem = this.gui.get_element_mut_unchecked(this.element_key);
                     let mut txt = String::new();
                     match File::open(&path) {
                         Ok(mut file) => 
-                        match file.read_to_string(&mut txt) {
-                            Err(err) => txt = format!("Could not read file: {path:?}\nReason: {err:?}"),
-                            Ok(_) => ()
-                        }
+                        if let Err(err) = file.read_to_string(&mut txt) { txt = format!("Could not read file: {path:?}\nReason: {err:?}") }
                         Err(err) => txt = format!("Could open read file: {path:?}\nReason: {err:?}")
                     }
 
@@ -164,9 +159,7 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                let start = std::time::Instant::now();
                 this.gui.update(0.0);
-                //println!("update took: {:?}", start.elapsed());
                 this.renderer
                     .prepare(&mut this.gui, &this.drawing.queue, &this.drawing.device);
                 this.drawing.draw(&mut this.gui, &mut this.renderer);

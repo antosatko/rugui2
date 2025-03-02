@@ -2,15 +2,11 @@ use std::{num::NonZero, sync::Arc, time::Instant};
 
 use common::{
     resize_event,
-    rugui2_wgpu::{texture::Texture, Rugui2WGPU},
-    rugui2_winit, Drawing,
+    rugui2_wgpu::{texture::Texture, Rugui2WGPU}, Drawing,
 };
 use rugui2::{
-    colors::Colors,
-    events::{ElemEventTypes, ElemEvents, EventListener, MouseButtons},
-    styles::{Container, Gradient, Portion, Position, Value, Values},
     widgets::{
-        ColumnsBuilder, GridBuilder, RowsBuilder, Scroll, ScrollBounds, WidgetControlFlow,
+        ScrollBounds,
         WidgetMsgs,
     },
     Gui,
