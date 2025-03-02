@@ -380,6 +380,28 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
         let containers = make_containers!();
 
         // --- TRANSFORM-DEPENDENT ---
+        let mut text_update = false;
+        if transform_update || styles.rich_text.is_dirty() {
+            if let Some(text) = styles.rich_text.fix_dirty_force_mut() {
+                text.instance_data.align = text.styles.align.fix_dirty_force().calc();
+                text.instance_data.line_offset = text.styles.line_offset.fix_dirty_force_mut().calc();
+                text.instance_data.paragraph_offset = text.styles.paragraph_offset.fix_dirty_force_mut().calc();
+                text.instance_data.wrap_on_overflow = *text.styles.wrap_on_overflow.fix_dirty_force();
+
+                for section in &mut text.sections {
+                    section.instance_data.bold = *section.styles.bold.fix_dirty_force();
+                    section.instance_data.italic = *section.styles.italic.fix_dirty_force();
+                    section.instance_data.font = section.styles.font;
+                    section.instance_data.font_size = section.styles.font_size.fix_dirty_force().calc(containers, variables);
+                    section.instance_data.left_pad = section.styles.left_pad.fix_dirty_force().calc(containers, variables);
+                    section.instance_data.right_pad = section.styles.right_pad.fix_dirty_force().calc(containers, variables);
+                    if let Some(c) = section.styles.color.fix_dirty() {
+                        section.instance_data.color = (*c).into()
+                    }
+                }
+                text_update = true;
+            }
+        }
         if transform_update || styles.round.is_dirty() {
             if let Some(rnd) = styles.round.get() {
                 let size = rnd.calc(containers, variables);
@@ -419,7 +441,7 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
             }
         }
         //          --- TEXT-THINGS ---
-        let mut text_update = false;
+        /*let mut text_update = false;
         if styles.text.get().is_some() {
             if transform_update || styles.font_size.is_dirty() {
                 text_update = true;
@@ -446,7 +468,7 @@ impl<Msg: Clone, Img: Clone + ImageData> Gui<Msg, Img> {
                     TextAlign::Portion(p) => p.calc(),
                 }
             }
-        }
+        }*/
         //          --- TEXT-THINGS ---
         // --- TRANSFORM-DEPENDENT ---
 

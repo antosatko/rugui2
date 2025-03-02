@@ -10,8 +10,12 @@ use swash::text::{
     Script,
 };
 
-use crate::text::{
-    select_pref_font, FontIdx, GlyphKey, PhysicalChar, Rect, TextProccesor, DEFAULT_FONT_SIZE,
+use crate::{
+    colors::Colors,
+    styles::{Portion, StyleComponent, TextAlign, Value},
+    text::{
+        select_pref_font, FontIdx, GlyphKey, PhysicalChar, Rect, TextProccesor, DEFAULT_FONT_SIZE,
+    },
 };
 
 #[derive(Debug, Copy, Clone)]
@@ -22,7 +26,7 @@ pub enum GlyphFlags {
 }
 
 impl GlyphFlags {
-    pub fn section_styles_to_flags(styles: &SectionStyles) -> u8 {
+    pub fn section_styles_to_flags(styles: &SectionStylesInstance) -> u8 {
         let mut result = 0;
         if styles.bold {
             result |= GlyphFlags::Bold as u8;
@@ -35,7 +39,7 @@ impl GlyphFlags {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct TextStyles {
+pub struct TextStylesInstance {
     pub align: f32,
     pub line_offset: f32,
     pub paragraph_offset: f32,
@@ -43,8 +47,16 @@ pub struct TextStyles {
     pub wrap_on_overflow: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct TextStyles {
+    pub align: StyleComponent<TextAlign>,
+    pub line_offset: StyleComponent<Portion>,
+    pub paragraph_offset: StyleComponent<Portion>,
+    pub wrap_on_overflow: StyleComponent<bool>,
+}
+
 #[derive(Debug, Copy, Clone)]
-pub struct SectionStyles {
+pub struct SectionStylesInstance {
     pub left_pad: f32,
     pub right_pad: f32,
     pub color: [f32; 4],
@@ -53,9 +65,20 @@ pub struct SectionStyles {
     pub bold: bool,
     pub italic: bool,
 }
+#[derive(Debug, Clone)]
+pub struct SectionStyles {
+    pub left_pad: StyleComponent<Value>,
+    pub right_pad: StyleComponent<Value>,
+    pub color: StyleComponent<Colors>,
+    pub font_size: StyleComponent<Value>,
+    pub font: FontIdx,
+    pub bold: StyleComponent<bool>,
+    pub italic: StyleComponent<bool>,
+}
 
 #[derive(Debug, Clone)]
 pub struct Text {
+    pub(crate)instance_data: TextStylesInstance,
     pub styles: TextStyles,
     pub shape: ShapeStorages,
     pub sections: Vec<TextSection>,
@@ -63,6 +86,7 @@ pub struct Text {
 
 #[derive(Debug, Clone)]
 pub struct TextSection {
+    pub(crate)instance_data: SectionStylesInstance,
     pub styles: SectionStyles,
     pub text: Rope,
     pub kind: SectionKinds,
@@ -99,17 +123,27 @@ pub struct PhysicalLine {
 }
 
 impl Text {
+    pub const DEFAULT_STYLES: TextStyles = TextStyles {
+        align: StyleComponent::new(TextAlign::Left),
+        line_offset: StyleComponent::new(Portion::Full),
+        paragraph_offset: StyleComponent::new(Portion::Mul(1.75)),
+        wrap_on_overflow: StyleComponent::new(false),
+    };
+
     pub fn from_str(text: &str) -> Self {
         Self {
-            styles: TextStyles::default(),
+            instance_data: TextStylesInstance::default(),
             shape: ShapeStorages::Internal(TextShape::default()),
+            styles: Self::DEFAULT_STYLES,
             sections: vec![TextSection::new(text)],
         }
     }
+
     pub fn new() -> Self {
         Self {
-            styles: TextStyles::default(),
+            instance_data: TextStylesInstance::default(),
             shape: ShapeStorages::Internal(TextShape::default()),
+            styles: Self::DEFAULT_STYLES,
             sections: Vec::new(),
         }
     }
@@ -122,7 +156,7 @@ impl Text {
     ) {
         fn endl(
             shape: &mut TextShape,
-            styles: &TextStyles,
+            styles: &TextStylesInstance,
             line_index: usize,
             bounds: Rect,
         ) -> f32 {
@@ -168,17 +202,17 @@ impl Text {
             let mut top_pos = bounds.top;
             let mut left_pos = bounds.left;
             for section in sections {
-                let flags = GlyphFlags::section_styles_to_flags(&section.styles);
-                let font_size = section.styles.font_size;
+                let flags = GlyphFlags::section_styles_to_flags(&section.instance_data);
+                let font_size = section.instance_data.font_size;
                 (left_pos, top_pos) = match section.kind {
                     SectionKinds::Section => {
-                        (left_pos.max(section.styles.left_pad + bounds.left), top_pos)
+                        (left_pos.max(section.instance_data.left_pad + bounds.left), top_pos)
                     }
                     SectionKinds::NewLine => {
                         let max_height = endl(shape, styles, line_index, bounds);
                         line_index += 1;
                         (
-                            section.styles.left_pad + bounds.left,
+                            section.instance_data.left_pad + bounds.left,
                             top_pos + max_height + styles.line_offset,
                         )
                     }
@@ -186,7 +220,7 @@ impl Text {
                         let max_height = endl(shape, styles, line_index, bounds);
                         line_index += 1;
                         (
-                            section.styles.left_pad + bounds.left,
+                            section.instance_data.left_pad + bounds.left,
                             top_pos + max_height + styles.line_offset + styles.paragraph_offset,
                         )
                     }
@@ -194,13 +228,13 @@ impl Text {
                 let mut phys_line = PhysicalLine {
                     line_index,
                     chars: Vec::new(),
-                    color: section.styles.color,
-                    height: section.styles.font_size,
+                    color: section.instance_data.color,
+                    height: section.instance_data.font_size,
                     bounds: Rect {
                         left: left_pos,
                         top: top_pos,
                         width: 0.0,
-                        height: section.styles.font_size,
+                        height: section.instance_data.font_size,
                     },
                 };
                 for line in section.text.lines() {
@@ -224,7 +258,7 @@ impl Text {
                         while parser.next(&mut ctx.cluster) {
                             let i = match select_pref_font(
                                 &ctx.fonts,
-                                section.styles.font.raw() as usize,
+                                section.instance_data.font.raw() as usize,
                                 &mut ctx.cluster,
                             ) {
                                 Some(i) => i,
@@ -271,19 +305,19 @@ impl Text {
     pub fn with_shape_mut(
         &mut self,
         shape: Option<&mut TextShape>,
-        cb: impl FnOnce(&mut TextShape, &TextStyles, &mut Vec<TextSection>),
+        cb: impl FnOnce(&mut TextShape, &TextStylesInstance, &mut Vec<TextSection>),
     ) {
         match shape {
-            Some(s) => cb(s, &self.styles, &mut self.sections),
+            Some(s) => cb(s, &self.instance_data, &mut self.sections),
             None => match &mut self.shape {
                 ShapeStorages::External => (),
-                ShapeStorages::Internal(s) => cb(s, &self.styles, &mut self.sections),
+                ShapeStorages::Internal(s) => cb(s, &self.instance_data, &mut self.sections),
                 ShapeStorages::Shared(s) => match s.write() {
-                    Ok(mut s) => cb(&mut s, &self.styles, &mut self.sections),
+                    Ok(mut s) => cb(&mut s, &self.instance_data, &mut self.sections),
                     Err(_) => (),
                 },
                 ShapeStorages::ThreadSync(s) => match s.lock() {
-                    Ok(mut s) => cb(&mut s, &self.styles, &mut self.sections),
+                    Ok(mut s) => cb(&mut s, &self.instance_data, &mut self.sections),
                     Err(_) => (),
                 },
             },
@@ -292,19 +326,19 @@ impl Text {
     pub fn with_shape(
         &self,
         shape: Option<&mut TextShape>,
-        cb: impl FnOnce(&TextShape, &TextStyles, &Vec<TextSection>),
+        cb: impl FnOnce(&TextShape, &TextStylesInstance, &Vec<TextSection>),
     ) {
         match shape {
-            Some(s) => cb(s, &self.styles, &self.sections),
+            Some(s) => cb(s, &self.instance_data, &self.sections),
             None => match &self.shape {
                 ShapeStorages::External => return,
-                ShapeStorages::Internal(s) => cb(s, &self.styles, &self.sections),
+                ShapeStorages::Internal(s) => cb(s, &self.instance_data, &self.sections),
                 ShapeStorages::Shared(s) => match s.write() {
-                    Ok(s) => cb(&s, &self.styles, &self.sections),
+                    Ok(s) => cb(&s, &self.instance_data, &self.sections),
                     Err(_) => return,
                 },
                 ShapeStorages::ThreadSync(s) => match s.lock() {
-                    Ok(s) => cb(&s, &self.styles, &self.sections),
+                    Ok(s) => cb(&s, &self.instance_data, &self.sections),
                     Err(_) => return,
                 },
             },
@@ -312,7 +346,7 @@ impl Text {
     }
 }
 
-impl Default for TextStyles {
+impl Default for TextStylesInstance {
     fn default() -> Self {
         Self {
             align: 0.0,
@@ -324,9 +358,9 @@ impl Default for TextStyles {
     }
 }
 
-impl Default for SectionStyles {
+impl Default for SectionStylesInstance {
     fn default() -> Self {
-        SectionStyles {
+        SectionStylesInstance {
             left_pad: 0.0,
             right_pad: 0.0,
             color: [1.0, 1.0, 1.0, 1.0],
@@ -348,11 +382,22 @@ impl Default for TextShape {
 }
 
 impl TextSection {
+    pub const DEFAULT_STYLES: SectionStyles = SectionStyles {
+        color: StyleComponent::new(Colors::FRgba(1.0, 1.0, 1.0, 1.0)),
+        left_pad: StyleComponent::new(Value::Zero),
+        right_pad: StyleComponent::new(Value::Zero),
+        font_size: StyleComponent::new(Value::Px(DEFAULT_FONT_SIZE)),
+        font: FontIdx(0),
+        bold: StyleComponent::new(false),
+        italic: StyleComponent::new(false),
+    };
+    
     pub fn new(text: &str) -> Self {
         Self {
-            styles: SectionStyles::default(),
+            instance_data: SectionStylesInstance::default(),
             text: Rope::from_str(text),
             kind: SectionKinds::Section,
+            styles: Self::DEFAULT_STYLES
         }
     }
 }

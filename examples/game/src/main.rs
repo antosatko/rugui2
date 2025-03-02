@@ -8,7 +8,7 @@ use std::{
 
 use gui::{Actions, GuiManager, Pages};
 use image::{EncodableLayout, GenericImageView};
-use rugui2::{events::Key, rich_text::TextStyles, styles::Value, widgets::WidgetMsgs, Gui};
+use rugui2::{colors::Colors, events::Key, rich_text::TextStylesInstance, styles::Value, widgets::WidgetMsgs, Gui};
 use rugui2_wgpu::{texture::Texture, Rugui2WGPU};
 use rugui2_winit::EventContext;
 use tokio::sync::{
@@ -133,54 +133,6 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
 
         let gui_manager = GuiManager::new(&mut gui, drawing.game_tex.clone(), imag.unwrap());
 
-        {
-            let ctx = &mut gui.text_ctx;
-
-            let mut text = rugui2::rich_text::Text::new();
-            text.styles = TextStyles {
-                align: 0.5,
-                ..Default::default()
-            };
-            let mut section = rugui2::rich_text::TextSection::new("OH MY GAH! 😇 ");
-            section.styles = rugui2::rich_text::SectionStyles {
-                color: [1.0, 0.0, 0.0, 1.0],
-                ..Default::default()
-            };
-            text.sections.push(section);
-            section = rugui2::rich_text::TextSection::new("I wish I were a bird. 🐦");
-            section.styles = rugui2::rich_text::SectionStyles {
-                color: [0.0, 1.0, 0.0, 1.0],
-                font: gui_manager.noto_font,
-                font_size: 30.0,
-                italic: true,
-                ..Default::default()
-            };
-            text.sections.push(section);
-            section = rugui2::rich_text::TextSection::new("Why are you speaking in English? 🫖");
-            section.kind = rugui2::rich_text::SectionKinds::NewLine;
-            section.styles = rugui2::rich_text::SectionStyles {
-                color: [0.0, 0.0, 1.0, 1.0],
-                bold: true,
-                font_size: 10.0,
-                ..Default::default()
-            };
-            text.sections.push(section);
-            section = rugui2::rich_text::TextSection::new("My daughter is going to America. 🍔");
-            section.kind = rugui2::rich_text::SectionKinds::NewLine;
-            section.styles = rugui2::rich_text::SectionStyles {
-                color: [0.0, 1.0, 1.0, 1.0],
-                ..Default::default()
-            };
-            text.sections.push(section);
-
-            let mut shape = rugui2::rich_text::TextShape::default();
-            text.procces(
-                ctx,
-                Some(&mut shape),
-                rugui2::text::Rect::new(0.0, 0.0, 500.0, 500.0),
-            );
-        }
-
         let drawing = Arc::new(Mutex::new(drawing));
 
         let (game_transmiter, game_reciever) = mpsc::channel(255);
@@ -240,7 +192,9 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
                     let text = elem.styles_mut().rich_text.get_mut().as_mut().unwrap();
                     for (i, s) in text.sections.iter_mut().enumerate() {
                         let style = &mut s.styles;
-                        style.color[2] = (elapsed/1.5 + i as f32 / 6.0).sin().abs();
+                        if let Colors::FRgba(_, _, b, _) = &mut style.color.get_mut() {
+                            *b = (elapsed/1.5 + i as f32 / 6.0).sin().abs();
+                        }
                     }
                 }
                 this.gui.update(elapsed);

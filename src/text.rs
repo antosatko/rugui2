@@ -22,6 +22,21 @@ pub struct TextProccesor {
 pub struct FontIdx(pub(crate) u16);
 
 impl FontIdx {
+    /// Creates dummy `FontIdx(u16::MAX)`
+    /// 
+    /// This is a helper function library users that need
+    /// to have some placeholder font index before they
+    /// add their own fonts into the `Gui`
+    /// 
+    /// # Safety
+    /// 
+    /// If the `Gui` tries to proccess a text with this
+    /// index it will cause a panic
+    /// 
+    pub unsafe fn dummy() -> Self {
+        Self(u16::MAX)
+    }
+
     pub fn raw(&self) -> u16 {
         self.0
     }

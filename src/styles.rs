@@ -489,6 +489,17 @@ impl Value {
     }
 }
 
+impl TextAlign {
+    pub(crate) fn calc(&self) -> f32 {
+        match self {
+            TextAlign::Left => 0.0,
+            TextAlign::Center => 0.25,
+            TextAlign::Right => 0.5,
+            TextAlign::Portion(portion) => portion.calc(),
+        }
+    }
+}
+
 impl Portion {
     pub(crate) fn calc(&self) -> f32 {
         match self {
@@ -594,7 +605,7 @@ impl Rotation {
 }
 
 impl<T: Debug + Clone> StyleComponent<T> {
-    pub fn new(v: T) -> Self {
+    pub const fn new(v: T) -> Self {
         Self {
             val: v,
             dirty: false,
