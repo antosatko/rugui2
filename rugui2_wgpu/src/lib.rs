@@ -1099,22 +1099,24 @@ impl Rugui2WGPU {
 
         let pi_data = &self.instance_buffers[buffer].2[i as usize];
         if pi_data.text {
-            pass.set_pipeline(&self.glyph_pipeline);
-            pass.set_vertex_buffer(
-                0,
-                self.glyph_instance_buffers
-                    .get(pi_data.text_start.0)
-                    .expect(&format!("Font at: '{}' not loaded.", pi_data.text_start.0))
-                    .0
-                    .slice(..),
-            );
-            pass.draw(
-                0..6,
-                pi_data.text_start.1 as u32..pi_data.text_end.1 as u32,
-            );
+            if pi_data.text_start != pi_data.text_end {
+                pass.set_pipeline(&self.glyph_pipeline);
+                pass.set_vertex_buffer(
+                    0,
+                    self.glyph_instance_buffers
+                        .get(pi_data.text_start.0)
+                        .expect(&format!("Font at: '{}' not loaded.", pi_data.text_start.0))
+                        .0
+                        .slice(..),
+                );
+                pass.draw(
+                    0..6,
+                    pi_data.text_start.1 as u32..pi_data.text_end.1 as u32,
+                );
+                pass.set_pipeline(&self.pipeline);
+                pass.set_vertex_buffer(0, self.instance_buffers[buffer].0.slice(..));
+            }
 
-            pass.set_pipeline(&self.pipeline);
-            pass.set_vertex_buffer(0, self.instance_buffers[buffer].0.slice(..));
         }
 
         if let Some(children) = e.children.take() {

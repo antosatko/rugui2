@@ -188,13 +188,14 @@ impl ApplicationHandler<Engine2Main> for WinitAgentIAmLosingIt {
                 let elapsed = this.start_time.elapsed().as_secs_f32();
                 {
                     let elem = this.gui.get_element_mut_unchecked(this.gui_manager.start_btn);
-                    let text = elem.styles_mut().rich_text.get_mut().as_mut().unwrap();
-                    for (i, s) in text.sections.iter_mut().enumerate() {
-                        let style = &mut s.styles;
-                        if let Colors::FRgba(_, _, b, _) = &mut style.color.get_mut() {
-                            *b = (elapsed/1.5 + i as f32 / 6.0).sin().abs();
+                    elem.styles_mut().rich_text.get_mut().as_mut().map(|text| {
+                        for (i, s) in text.sections.iter_mut().enumerate() {
+                            let style = &mut s.styles;
+                            if let Colors::FRgba(_, _, b, _) = &mut style.color.get_mut() {
+                                *b = (elapsed/1.5 + i as f32 / 6.0).sin().abs();
+                            }
                         }
-                    }
+                    });
                 }
                 this.gui.update(elapsed);
                 println!("update: {:?}", start.elapsed());
